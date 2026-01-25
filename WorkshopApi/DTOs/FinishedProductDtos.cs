@@ -56,6 +56,7 @@ public class FinishedProductResponseDto
     public string Status { get; set; } = string.Empty;
     public string StatusDisplay { get; set; } = string.Empty;
     public decimal CostPerUnit { get; set; }
+    public decimal? RecommendedPrice { get; set; }
     public decimal? SalePrice { get; set; }
     public decimal? Profit { get; set; }
     public string? Client { get; set; }

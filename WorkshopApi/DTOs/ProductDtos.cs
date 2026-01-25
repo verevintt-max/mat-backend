@@ -31,6 +31,18 @@ public class ProductCreateDto
     [Range(0, 1000, ErrorMessage = "Наценка должна быть от 0 до 1000%")]
     public decimal MarkupPercent { get; set; } = 100;
 
+    /// <summary>
+    /// Себестоимость (ручной ввод)
+    /// </summary>
+    [Range(0, 100000000)]
+    public decimal? EstimatedCost { get; set; }
+
+    /// <summary>
+    /// Рекомендованная цена (ручной ввод)
+    /// </summary>
+    [Range(0, 100000000)]
+    public decimal? RecommendedPrice { get; set; }
+
     public List<RecipeItemCreateDto> RecipeItems { get; set; } = new();
 }
 
@@ -59,6 +71,18 @@ public class ProductUpdateDto
 
     [Range(0, 1000)]
     public decimal? MarkupPercent { get; set; }
+
+    /// <summary>
+    /// Себестоимость (ручной ввод)
+    /// </summary>
+    [Range(0, 100000000)]
+    public decimal? EstimatedCost { get; set; }
+
+    /// <summary>
+    /// Рекомендованная цена (ручной ввод)
+    /// </summary>
+    [Range(0, 100000000)]
+    public decimal? RecommendedPrice { get; set; }
 
     public bool? IsArchived { get; set; }
 

@@ -125,7 +125,9 @@ public class ProductService
             ProductionTimeMinutes = dto.ProductionTimeMinutes,
             Weight = dto.Weight,
             FileLinks = dto.FileLinks,
-            MarkupPercent = dto.MarkupPercent
+            MarkupPercent = dto.MarkupPercent,
+            EstimatedCost = dto.EstimatedCost,
+            RecommendedPrice = dto.RecommendedPrice
         };
 
         _context.Products.Add(product);
@@ -145,8 +147,8 @@ public class ProductService
 
         await _context.SaveChangesAsync();
 
-        // Пересчитываем себестоимость
-        await RecalculateCostAsync(product.Id);
+        // Пересчитываем вес на основе материалов
+        await RecalculateWeightAsync(product.Id);
 
         await _historyService.LogAsync(
             OperationTypes.ProductCreate,
@@ -174,6 +176,8 @@ public class ProductService
         if (dto.Weight.HasValue) product.Weight = dto.Weight.Value;
         if (dto.FileLinks != null) product.FileLinks = dto.FileLinks;
         if (dto.MarkupPercent.HasValue) product.MarkupPercent = dto.MarkupPercent.Value;
+        if (dto.EstimatedCost.HasValue) product.EstimatedCost = dto.EstimatedCost.Value;
+        if (dto.RecommendedPrice.HasValue) product.RecommendedPrice = dto.RecommendedPrice.Value;
         if (dto.IsArchived.HasValue) product.IsArchived = dto.IsArchived.Value;
 
         // Обновляем рецепт, если указан
@@ -198,8 +202,11 @@ public class ProductService
         product.UpdatedAt = DateTime.UtcNow;
         await _context.SaveChangesAsync();
 
-        // Пересчитываем себестоимость
-        await RecalculateCostAsync(product.Id);
+        // Пересчитываем вес на основе материалов (если рецепт обновлялся)
+        if (dto.RecipeItems != null)
+        {
+            await RecalculateWeightAsync(product.Id);
+        }
 
         await _historyService.LogAsync(
             OperationTypes.ProductUpdate,
@@ -254,7 +261,9 @@ public class ProductService
             ProductionTimeMinutes = original.ProductionTimeMinutes,
             Weight = original.Weight,
             FileLinks = original.FileLinks,
-            MarkupPercent = original.MarkupPercent
+            MarkupPercent = original.MarkupPercent,
+            EstimatedCost = original.EstimatedCost,
+            RecommendedPrice = original.RecommendedPrice
         };
 
         _context.Products.Add(copy);
@@ -274,8 +283,8 @@ public class ProductService
 
         await _context.SaveChangesAsync();
 
-        // Пересчитываем себестоимость
-        await RecalculateCostAsync(copy.Id);
+        // Пересчитываем вес на основе материалов
+        await RecalculateWeightAsync(copy.Id);
 
         await _historyService.LogAsync(
             OperationTypes.ProductCreate,
@@ -298,20 +307,37 @@ public class ProductService
             .ToListAsync();
     }
 
-    public async Task RecalculateCostAsync(int productId)
+    /// <summary>
+    /// Пересчитывает вес изделия на основе материалов в рецепте (кг и г)
+    /// </summary>
+    public async Task RecalculateWeightAsync(int productId)
     {
         var product = await _context.Products
+            .Include(p => p.RecipeItems)
+                .ThenInclude(r => r.Material)
             .FirstOrDefaultAsync(p => p.Id == productId);
 
         if (product == null) return;
 
-        // Себестоимость = Вес * 2000 руб/кг
-        // Рекомендованная цена = Вес * 4000 руб/кг
-        const decimal COST_PER_KG = 2000m;
-        const decimal PRICE_PER_KG = 4000m;
+        decimal totalWeightKg = 0;
 
-        product.EstimatedCost = Math.Round(product.Weight * COST_PER_KG, 2);
-        product.RecommendedPrice = Math.Round(product.Weight * PRICE_PER_KG, 2);
+        foreach (var item in product.RecipeItems)
+        {
+            var unit = item.Material.Unit.ToLower().Trim();
+            
+            // Если единица измерения - килограммы
+            if (unit == "кг" || unit == "kg" || unit == "килограмм" || unit == "килограммы")
+            {
+                totalWeightKg += item.Quantity;
+            }
+            // Если единица измерения - граммы
+            else if (unit == "г" || unit == "g" || unit == "гр" || unit == "грамм" || unit == "граммы")
+            {
+                totalWeightKg += item.Quantity / 1000m;
+            }
+        }
+
+        product.Weight = Math.Round(totalWeightKg, 4);
         product.UpdatedAt = DateTime.UtcNow;
 
         await _context.SaveChangesAsync();

@@ -28,6 +28,12 @@ public class FinishedProduct
     public decimal CostPerUnit { get; set; }
 
     /// <summary>
+    /// Рекомендованная цена (из карточки изделия на момент производства)
+    /// </summary>
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal? RecommendedPrice { get; set; }
+
+    /// <summary>
     /// Цена продажи (если продано)
     /// </summary>
     [Column(TypeName = "decimal(18,2)")]

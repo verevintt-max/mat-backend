@@ -48,6 +48,7 @@ public class ProductionResponseDto
     public string? QrCode { get; set; }
     public decimal CostPerUnit { get; set; }
     public decimal TotalCost { get; set; }
+    public decimal? RecommendedPricePerUnit { get; set; }
     public string? PhotoPath { get; set; }
     public string? Comment { get; set; }
     public bool IsCancelled { get; set; }
@@ -80,6 +81,7 @@ public class ProductionListItemDto
     public string BatchNumber { get; set; } = string.Empty;
     public decimal CostPerUnit { get; set; }
     public decimal TotalCost { get; set; }
+    public decimal? RecommendedPricePerUnit { get; set; }
     public bool IsCancelled { get; set; }
     public int InStockCount { get; set; }
     public int SoldCount { get; set; }

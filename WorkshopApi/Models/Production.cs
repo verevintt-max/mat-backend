@@ -46,6 +46,12 @@ public class Production
     public decimal TotalCost { get; set; }
 
     /// <summary>
+    /// Рекомендованная цена за единицу (из карточки изделия на момент производства)
+    /// </summary>
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal? RecommendedPricePerUnit { get; set; }
+
+    /// <summary>
     /// Путь к фото готового изделия
     /// </summary>
     [MaxLength(500)]

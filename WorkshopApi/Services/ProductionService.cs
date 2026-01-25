@@ -53,6 +53,7 @@ public class ProductionService
                 BatchNumber = p.BatchNumber,
                 CostPerUnit = p.CostPerUnit,
                 TotalCost = p.TotalCost,
+                RecommendedPricePerUnit = p.RecommendedPricePerUnit,
                 IsCancelled = p.IsCancelled,
                 InStockCount = p.FinishedProducts.Count(fp => fp.Status == FinishedProductStatus.InStock),
                 SoldCount = p.FinishedProducts.Count(fp => fp.Status == FinishedProductStatus.Sold)
@@ -83,6 +84,7 @@ public class ProductionService
             QrCode = production.QrCode,
             CostPerUnit = production.CostPerUnit,
             TotalCost = production.TotalCost,
+            RecommendedPricePerUnit = production.RecommendedPricePerUnit,
             PhotoPath = production.PhotoPath,
             Comment = production.Comment,
             IsCancelled = production.IsCancelled,
@@ -180,14 +182,19 @@ public class ProductionService
         // Генерируем номер партии
         var batchNumber = await GenerateBatchNumberAsync();
 
+        // Используем себестоимость и рек. цену из карточки изделия
+        var costPerUnit = product.EstimatedCost ?? 0;
+        var recommendedPricePerUnit = product.RecommendedPrice;
+
         var production = new Production
         {
             ProductId = dto.ProductId,
             Quantity = dto.Quantity,
             ProductionDate = dto.ProductionDate ?? DateTime.UtcNow,
             BatchNumber = batchNumber,
-            CostPerUnit = check.EstimatedCostPerUnit,
-            TotalCost = check.EstimatedTotalCost,
+            CostPerUnit = costPerUnit,
+            TotalCost = costPerUnit * dto.Quantity,
+            RecommendedPricePerUnit = recommendedPricePerUnit,
             Comment = dto.Comment,
             PhotoPath = dto.PhotoPath
         };
@@ -205,7 +212,8 @@ public class ProductionService
             {
                 ProductionId = production.Id,
                 Status = FinishedProductStatus.InStock,
-                CostPerUnit = production.CostPerUnit
+                CostPerUnit = production.CostPerUnit,
+                RecommendedPrice = production.RecommendedPricePerUnit
             };
             _context.FinishedProducts.Add(finishedProduct);
         }
