@@ -45,8 +45,12 @@ builder.Services.AddScoped<FinishedProductService>();
 builder.Services.AddScoped<ReportService>();
 
 // CORS - allow frontend URLs
-var allowedOrigins = Environment.GetEnvironmentVariable("ALLOWED_ORIGINS")?.Split(',') 
-    ?? new[] { "http://localhost:3000", "http://localhost:5173" };
+var allowedOriginsEnv = Environment.GetEnvironmentVariable("ALLOWED_ORIGINS");
+var allowedOrigins = !string.IsNullOrEmpty(allowedOriginsEnv) 
+    ? allowedOriginsEnv.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(o => o.Trim()).ToArray()
+    : new[] { "http://localhost:3000", "http://localhost:5173" };
+
+Console.WriteLine($"CORS allowed origins: {string.Join(", ", allowedOrigins)}");
 
 builder.Services.AddCors(options =>
 {
@@ -54,8 +58,7 @@ builder.Services.AddCors(options =>
     {
         policy.WithOrigins(allowedOrigins)
               .AllowAnyHeader()
-              .AllowAnyMethod()
-              .AllowCredentials();
+              .AllowAnyMethod();
     });
 });
 
@@ -77,24 +80,19 @@ app.UseAuthorization();
 
 app.MapControllers();
 
-// Apply migrations on startup (for development)
+// Test database connection on startup
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<WorkshopDbContext>();
     try
     {
-        db.Database.Migrate();
-        Console.WriteLine("Database migrations applied successfully.");
+        // Just test the connection, don't try to migrate
+        await db.Database.CanConnectAsync();
+        Console.WriteLine("Database connection successful.");
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"Error applying migrations: {ex.Message}");
-        // In development, try to create the database
-        if (app.Environment.IsDevelopment())
-        {
-            db.Database.EnsureCreated();
-            Console.WriteLine("Database created using EnsureCreated.");
-        }
+        Console.WriteLine($"Database connection error: {ex.Message}");
     }
 }
 
