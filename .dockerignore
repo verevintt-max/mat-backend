@@ -1,0 +1,15 @@
+**/.git
+**/.gitignore
+**/.vs
+**/.vscode
+**/bin
+**/obj
+**/*.user
+**/*.dbmdl
+**/*.jfm
+**/azds.yaml
+**/*.md
+**/node_modules
+Dockerfile*
+docker-compose*
+.dockerignore

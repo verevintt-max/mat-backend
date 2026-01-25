@@ -2,13 +2,11 @@ services:
   - type: web
     name: mat-backend
     env: docker
-    dockerfilePath: ./WorkshopApi/Dockerfile
-    dockerContext: ./WorkshopApi
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
     envVars:
       - key: DATABASE_URL
-        fromDatabase:
-          name: mattest
-          property: connectionString
+        value: postgres://mattest_user:jLxI1nzneBGq6w4tPe56OwyAVVY65WNH@dpg-d5r2rq14tr6s73dqajdg-a.oregon-postgres.render.com/mattest
       - key: ALLOWED_ORIGINS
         value: https://mat-frontend.onrender.com
       - key: ASPNETCORE_ENVIRONMENT
