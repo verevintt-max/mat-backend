@@ -48,6 +48,7 @@ public class FinishedProductService
                 Status = fp.Status,
                 StatusDisplay = GetStatusDisplay(fp.Status),
                 CostPerUnit = fp.CostPerUnit,
+                RecommendedPrice = fp.Production.Product.RecommendedPrice,
                 SalePrice = fp.SalePrice,
                 Client = fp.Client,
                 SaleDate = fp.SaleDate
