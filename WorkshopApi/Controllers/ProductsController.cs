@@ -155,12 +155,12 @@ public class ProductsController : ControllerBase
     }
 
     /// <summary>
-    /// Пересчитать себестоимость изделия
+    /// Пересчитать вес изделия на основе материалов
     /// </summary>
-    [HttpPost("{id}/recalculate-cost")]
-    public async Task<ActionResult<ProductResponseDto>> RecalculateCost(int id)
+    [HttpPost("{id}/recalculate-weight")]
+    public async Task<ActionResult<ProductResponseDto>> RecalculateWeight(int id)
     {
-        await _productService.RecalculateCostAsync(id);
+        await _productService.RecalculateWeightAsync(id);
         var product = await _productService.GetByIdAsync(id);
         if (product == null)
             return NotFound(new { message = $"Изделие с ID {id} не найдено" });
