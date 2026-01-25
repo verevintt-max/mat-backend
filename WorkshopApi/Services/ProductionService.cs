@@ -127,8 +127,6 @@ public class ProductionService
             Materials = new List<MaterialAvailabilityDto>()
         };
 
-        decimal totalCost = 0;
-
         foreach (var item in product.RecipeItems)
         {
             var balance = await _materialService.GetMaterialBalanceAsync(item.MaterialId);
@@ -152,12 +150,13 @@ public class ProductionService
                 result.CanProduce = false;
                 result.Warnings.Add($"Не хватает материала '{item.Material.Name}': нужно {requiredQuantity} {item.Material.Unit}, доступно {balance.CurrentStock} {item.Material.Unit}");
             }
-
-            totalCost += requiredQuantity * balance.AveragePrice;
         }
 
-        result.EstimatedCostPerUnit = Math.Round(totalCost / quantity, 2);
-        result.EstimatedTotalCost = Math.Round(totalCost, 2);
+        // Используем себестоимость и рек. цену из карточки изделия (ручной ввод)
+        var costPerUnit = product.EstimatedCost ?? 0;
+        result.EstimatedCostPerUnit = costPerUnit;
+        result.EstimatedTotalCost = costPerUnit * quantity;
+        result.RecommendedPricePerUnit = product.RecommendedPrice;
 
         return result;
     }

@@ -103,6 +103,7 @@ public class ProductionCheckResultDto
     public bool CanProduce { get; set; }
     public decimal EstimatedCostPerUnit { get; set; }
     public decimal EstimatedTotalCost { get; set; }
+    public decimal? RecommendedPricePerUnit { get; set; }
     public List<MaterialAvailabilityDto> Materials { get; set; } = new();
     public List<string> Warnings { get; set; } = new();
 }
