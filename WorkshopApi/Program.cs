@@ -44,32 +44,17 @@ builder.Services.AddScoped<ProductionService>();
 builder.Services.AddScoped<FinishedProductService>();
 builder.Services.AddScoped<ReportService>();
 
-// CORS - allow frontend URLs
-var allowedOriginsEnv = Environment.GetEnvironmentVariable("ALLOWED_ORIGINS");
-Console.WriteLine($"ALLOWED_ORIGINS env: {allowedOriginsEnv ?? "not set"}");
-
+// CORS - allow all origins for now (can be restricted later)
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
     {
-        if (!string.IsNullOrEmpty(allowedOriginsEnv))
-        {
-            var origins = allowedOriginsEnv.Split(',', StringSplitOptions.RemoveEmptyEntries)
-                .Select(o => o.Trim()).ToArray();
-            Console.WriteLine($"CORS allowed origins: {string.Join(", ", origins)}");
-            policy.WithOrigins(origins)
-                  .AllowAnyHeader()
-                  .AllowAnyMethod();
-        }
-        else
-        {
-            // Development: allow all
-            policy.AllowAnyOrigin()
-                  .AllowAnyHeader()
-                  .AllowAnyMethod();
-        }
+        policy.AllowAnyOrigin()
+              .AllowAnyHeader()
+              .AllowAnyMethod();
     });
 });
+Console.WriteLine("CORS: Allowing all origins");
 
 var app = builder.Build();
 
