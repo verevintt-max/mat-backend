@@ -58,6 +58,34 @@ Console.WriteLine("CORS: Allowing all origins");
 
 var app = builder.Build();
 
+// Global exception handler to ensure CORS headers are added even on errors
+app.Use(async (context, next) =>
+{
+    try
+    {
+        await next();
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Unhandled exception: {ex.Message}");
+        Console.WriteLine(ex.StackTrace);
+        
+        context.Response.StatusCode = 500;
+        context.Response.ContentType = "application/json";
+        
+        // Add CORS headers manually for error responses
+        context.Response.Headers.Add("Access-Control-Allow-Origin", "*");
+        context.Response.Headers.Add("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+        context.Response.Headers.Add("Access-Control-Allow-Headers", "Content-Type, Authorization");
+        
+        await context.Response.WriteAsJsonAsync(new { 
+            error = "Internal server error", 
+            message = ex.Message,
+            details = ex.InnerException?.Message 
+        });
+    }
+});
+
 // Configure the HTTP request pipeline.
 app.UseSwagger();
 app.UseSwaggerUI(c =>
