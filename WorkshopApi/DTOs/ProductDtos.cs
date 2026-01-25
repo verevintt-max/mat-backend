@@ -19,11 +19,17 @@ public class ProductCreateDto
     [Range(0, int.MaxValue, ErrorMessage = "Время должно быть неотрицательным")]
     public int ProductionTimeMinutes { get; set; }
 
+    /// <summary>
+    /// Вес изделия в килограммах
+    /// </summary>
+    [Range(0, 10000, ErrorMessage = "Вес должен быть от 0 до 10000 кг")]
+    public decimal Weight { get; set; } = 0;
+
     [MaxLength(2000)]
     public string? FileLinks { get; set; }
 
     [Range(0, 1000, ErrorMessage = "Наценка должна быть от 0 до 1000%")]
-    public decimal MarkupPercent { get; set; } = 30;
+    public decimal MarkupPercent { get; set; } = 100;
 
     public List<RecipeItemCreateDto> RecipeItems { get; set; } = new();
 }
@@ -41,6 +47,12 @@ public class ProductUpdateDto
 
     [Range(0, int.MaxValue)]
     public int? ProductionTimeMinutes { get; set; }
+
+    /// <summary>
+    /// Вес изделия в килограммах
+    /// </summary>
+    [Range(0, 10000)]
+    public decimal? Weight { get; set; }
 
     [MaxLength(2000)]
     public string? FileLinks { get; set; }
@@ -83,6 +95,7 @@ public class ProductResponseDto
     public string? Description { get; set; }
     public int ProductionTimeMinutes { get; set; }
     public string ProductionTimeFormatted { get; set; } = string.Empty;
+    public decimal Weight { get; set; }
     public string? FileLinks { get; set; }
     public decimal? EstimatedCost { get; set; }
     public decimal MarkupPercent { get; set; }
@@ -102,6 +115,7 @@ public class ProductListItemDto
     public string Name { get; set; } = string.Empty;
     public string? Category { get; set; }
     public int ProductionTimeMinutes { get; set; }
+    public decimal Weight { get; set; }
     public decimal? EstimatedCost { get; set; }
     public decimal? RecommendedPrice { get; set; }
     public bool IsArchived { get; set; }

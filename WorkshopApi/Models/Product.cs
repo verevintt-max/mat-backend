@@ -27,25 +27,31 @@ public class Product
     public int ProductionTimeMinutes { get; set; }
 
     /// <summary>
+    /// Вес изделия в килограммах
+    /// </summary>
+    [Column(TypeName = "decimal(18,4)")]
+    public decimal Weight { get; set; } = 0;
+
+    /// <summary>
     /// Ссылки на файлы (3D-модели, инструкции, фото) - JSON массив
     /// </summary>
     [MaxLength(2000)]
     public string? FileLinks { get; set; }
 
     /// <summary>
-    /// Примерная себестоимость (авторасчет по средним ценам материалов)
+    /// Себестоимость = Вес * 2000 руб/кг
     /// </summary>
     [Column(TypeName = "decimal(18,2)")]
     public decimal? EstimatedCost { get; set; }
 
     /// <summary>
-    /// Наценка в процентах для рекомендованной цены
+    /// Наценка в процентах (не используется, оставлено для совместимости)
     /// </summary>
     [Column(TypeName = "decimal(5,2)")]
-    public decimal MarkupPercent { get; set; } = 30;
+    public decimal MarkupPercent { get; set; } = 100;
 
     /// <summary>
-    /// Рекомендованная цена продажи
+    /// Рекомендованная цена = Вес * 4000 руб/кг
     /// </summary>
     [Column(TypeName = "decimal(18,2)")]
     public decimal? RecommendedPrice { get; set; }

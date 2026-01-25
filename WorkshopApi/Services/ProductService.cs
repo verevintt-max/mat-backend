@@ -47,6 +47,7 @@ public class ProductService
                 Name = p.Name,
                 Category = p.Category,
                 ProductionTimeMinutes = p.ProductionTimeMinutes,
+                Weight = p.Weight,
                 EstimatedCost = p.EstimatedCost,
                 RecommendedPrice = p.RecommendedPrice,
                 IsArchived = p.IsArchived,
@@ -98,6 +99,7 @@ public class ProductService
             Description = product.Description,
             ProductionTimeMinutes = product.ProductionTimeMinutes,
             ProductionTimeFormatted = FormatProductionTime(product.ProductionTimeMinutes),
+            Weight = product.Weight,
             FileLinks = product.FileLinks,
             EstimatedCost = product.EstimatedCost,
             MarkupPercent = product.MarkupPercent,
@@ -121,6 +123,7 @@ public class ProductService
             Category = dto.Category,
             Description = dto.Description,
             ProductionTimeMinutes = dto.ProductionTimeMinutes,
+            Weight = dto.Weight,
             FileLinks = dto.FileLinks,
             MarkupPercent = dto.MarkupPercent
         };
@@ -168,6 +171,7 @@ public class ProductService
         if (dto.Category != null) product.Category = dto.Category;
         if (dto.Description != null) product.Description = dto.Description;
         if (dto.ProductionTimeMinutes.HasValue) product.ProductionTimeMinutes = dto.ProductionTimeMinutes.Value;
+        if (dto.Weight.HasValue) product.Weight = dto.Weight.Value;
         if (dto.FileLinks != null) product.FileLinks = dto.FileLinks;
         if (dto.MarkupPercent.HasValue) product.MarkupPercent = dto.MarkupPercent.Value;
         if (dto.IsArchived.HasValue) product.IsArchived = dto.IsArchived.Value;
@@ -248,6 +252,7 @@ public class ProductService
             Category = original.Category,
             Description = original.Description,
             ProductionTimeMinutes = original.ProductionTimeMinutes,
+            Weight = original.Weight,
             FileLinks = original.FileLinks,
             MarkupPercent = original.MarkupPercent
         };
@@ -296,21 +301,17 @@ public class ProductService
     public async Task RecalculateCostAsync(int productId)
     {
         var product = await _context.Products
-            .Include(p => p.RecipeItems)
             .FirstOrDefaultAsync(p => p.Id == productId);
 
         if (product == null) return;
 
-        decimal estimatedCost = 0;
+        // Себестоимость = Вес * 2000 руб/кг
+        // Рекомендованная цена = Вес * 4000 руб/кг
+        const decimal COST_PER_KG = 2000m;
+        const decimal PRICE_PER_KG = 4000m;
 
-        foreach (var item in product.RecipeItems)
-        {
-            var balance = await _materialService.GetMaterialBalanceAsync(item.MaterialId);
-            estimatedCost += item.Quantity * balance.AveragePrice;
-        }
-
-        product.EstimatedCost = Math.Round(estimatedCost, 2);
-        product.RecommendedPrice = Math.Round(estimatedCost * (1 + product.MarkupPercent / 100), 2);
+        product.EstimatedCost = Math.Round(product.Weight * COST_PER_KG, 2);
+        product.RecommendedPrice = Math.Round(product.Weight * PRICE_PER_KG, 2);
         product.UpdatedAt = DateTime.UtcNow;
 
         await _context.SaveChangesAsync();
