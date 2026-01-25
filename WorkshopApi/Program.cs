@@ -67,8 +67,16 @@ app.Use(async (context, next) =>
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"Unhandled exception: {ex.Message}");
-        Console.WriteLine(ex.StackTrace);
+        // Log full exception chain
+        var currentEx = ex;
+        var errorMessages = new List<string>();
+        while (currentEx != null)
+        {
+            Console.WriteLine($"Exception: {currentEx.GetType().Name}: {currentEx.Message}");
+            errorMessages.Add($"{currentEx.GetType().Name}: {currentEx.Message}");
+            currentEx = currentEx.InnerException;
+        }
+        Console.WriteLine($"Stack trace: {ex.StackTrace}");
         
         context.Response.StatusCode = 500;
         context.Response.ContentType = "application/json";
@@ -80,8 +88,7 @@ app.Use(async (context, next) =>
         
         await context.Response.WriteAsJsonAsync(new { 
             error = "Internal server error", 
-            message = ex.Message,
-            details = ex.InnerException?.Message 
+            messages = errorMessages
         });
     }
 });
