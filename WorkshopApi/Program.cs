@@ -2,6 +2,9 @@ using Microsoft.EntityFrameworkCore;
 using WorkshopApi.Data;
 using WorkshopApi.Services;
 
+// Fix for PostgreSQL DateTime handling
+AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
