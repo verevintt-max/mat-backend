@@ -46,19 +46,28 @@ builder.Services.AddScoped<ReportService>();
 
 // CORS - allow frontend URLs
 var allowedOriginsEnv = Environment.GetEnvironmentVariable("ALLOWED_ORIGINS");
-var allowedOrigins = !string.IsNullOrEmpty(allowedOriginsEnv) 
-    ? allowedOriginsEnv.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(o => o.Trim()).ToArray()
-    : new[] { "http://localhost:3000", "http://localhost:5173" };
-
-Console.WriteLine($"CORS allowed origins: {string.Join(", ", allowedOrigins)}");
+Console.WriteLine($"ALLOWED_ORIGINS env: {allowedOriginsEnv ?? "not set"}");
 
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
     {
-        policy.WithOrigins(allowedOrigins)
-              .AllowAnyHeader()
-              .AllowAnyMethod();
+        if (!string.IsNullOrEmpty(allowedOriginsEnv))
+        {
+            var origins = allowedOriginsEnv.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                .Select(o => o.Trim()).ToArray();
+            Console.WriteLine($"CORS allowed origins: {string.Join(", ", origins)}");
+            policy.WithOrigins(origins)
+                  .AllowAnyHeader()
+                  .AllowAnyMethod();
+        }
+        else
+        {
+            // Development: allow all
+            policy.AllowAnyOrigin()
+                  .AllowAnyHeader()
+                  .AllowAnyMethod();
+        }
     });
 });
 
@@ -79,6 +88,10 @@ app.UseCors("AllowFrontend");
 app.UseAuthorization();
 
 app.MapControllers();
+
+// Health check endpoint
+app.MapGet("/health", () => Results.Ok(new { status = "healthy", timestamp = DateTime.UtcNow }));
+app.MapGet("/api/health", () => Results.Ok(new { status = "healthy", timestamp = DateTime.UtcNow }));
 
 // Test database connection on startup
 using (var scope = app.Services.CreateScope())
