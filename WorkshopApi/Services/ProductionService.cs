@@ -275,6 +275,53 @@ public class ProductionService
     }
 
     /// <summary>
+    /// Полное удаление производства из базы данных
+    /// </summary>
+    public async Task<bool> DeleteAsync(int id)
+    {
+        var production = await _context.Productions
+            .Include(p => p.Product)
+            .Include(p => p.MaterialWriteOffs)
+            .Include(p => p.FinishedProducts)
+            .FirstOrDefaultAsync(p => p.Id == id);
+
+        if (production == null) return false;
+
+        // Проверяем, нет ли проданных или списанных изделий
+        var nonInStockCount = production.FinishedProducts.Count(fp => fp.Status != FinishedProductStatus.InStock);
+        if (nonInStockCount > 0)
+            throw new InvalidOperationException($"Невозможно удалить производство: {nonInStockCount} изделий уже продано или списано");
+
+        var productName = production.Product.Name;
+        var batchNumber = production.BatchNumber;
+        var quantity = production.Quantity;
+        var totalCost = production.TotalCost;
+
+        // Удаляем записи списания материалов
+        _context.MaterialWriteOffs.RemoveRange(production.MaterialWriteOffs);
+
+        // Удаляем готовую продукцию
+        _context.FinishedProducts.RemoveRange(production.FinishedProducts);
+
+        // Удаляем само производство
+        _context.Productions.Remove(production);
+
+        await _context.SaveChangesAsync();
+
+        await _historyService.LogAsync(
+            OperationTypes.ProductionCancel,
+            "Production",
+            id,
+            productName,
+            quantity,
+            totalCost,
+            $"Удалено производство: {productName}, партия {batchNumber}"
+        );
+
+        return true;
+    }
+
+    /// <summary>
     /// Списание материалов по методу FIFO
     /// </summary>
     private async Task WriteOffMaterialsFifoAsync(Production production, List<RecipeItem> recipeItems, int quantity)

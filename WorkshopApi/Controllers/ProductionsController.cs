@@ -97,4 +97,24 @@ public class ProductionsController : ControllerBase
             return BadRequest(new { message = ex.Message });
         }
     }
+
+    /// <summary>
+    /// Полное удаление производства из базы данных
+    /// </summary>
+    [HttpDelete("{id}")]
+    public async Task<ActionResult> Delete(int id)
+    {
+        try
+        {
+            var result = await _productionService.DeleteAsync(id);
+            if (!result)
+                return NotFound(new { message = $"Производство с ID {id} не найдено" });
+
+            return Ok(new { message = "Производство удалено" });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
 }
