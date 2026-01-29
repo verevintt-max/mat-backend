@@ -11,6 +11,12 @@ public class FinishedProduct
     [Key]
     public int Id { get; set; }
 
+    /// <summary>
+    /// ID организации
+    /// </summary>
+    [Required]
+    public int OrganizationId { get; set; }
+
     [Required]
     public int ProductionId { get; set; }
 

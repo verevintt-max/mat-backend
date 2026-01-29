@@ -47,21 +47,38 @@ public abstract class BaseApiController : ControllerBase
     protected bool IsOwner => OrganizationRole?.Equals("Owner", StringComparison.OrdinalIgnoreCase) ?? false;
 
     /// <summary>
-    /// Проверить, что пользователь авторизован и имеет текущую организацию
+    /// Проверить, что пользователь авторизован и имеет текущую организацию.
+    /// Возвращает true если контекст валиден, false и устанавливает errorResult если нет.
     /// </summary>
-    protected IActionResult? ValidateOrganizationContext()
+    protected bool TryValidateOrganizationContext(out ActionResult? errorResult)
     {
         if (UserId == null)
         {
-            return Unauthorized(new { message = "Не авторизован" });
+            errorResult = Unauthorized(new { message = "Не авторизован" });
+            return false;
         }
 
         if (OrganizationId == null)
         {
-            return BadRequest(new { message = "Не выбрана активная организация" });
+            errorResult = BadRequest(new { message = "Не выбрана активная организация" });
+            return false;
         }
 
-        return null;
+        errorResult = null;
+        return true;
+    }
+
+    /// <summary>
+    /// Получить контекст организации
+    /// </summary>
+    protected OrganizationContext GetOrganizationContext()
+    {
+        return new OrganizationContext
+        {
+            UserId = UserId!.Value,
+            OrganizationId = OrganizationId!.Value,
+            Role = OrganizationRole ?? "Member"
+        };
     }
 }
 

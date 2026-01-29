@@ -26,8 +26,8 @@ public class MaterialReceiptsController : BaseApiController
         [FromQuery] DateTime? dateFrom = null,
         [FromQuery] DateTime? dateTo = null)
     {
-        var validation = ValidateOrganizationContext();
-        if (validation != null) return validation;
+        if (!TryValidateOrganizationContext(out var error))
+            return error!;
 
         var receipts = await _receiptService.GetAllAsync(OrganizationId!.Value, materialId, dateFrom, dateTo);
         return Ok(receipts);
@@ -39,8 +39,8 @@ public class MaterialReceiptsController : BaseApiController
     [HttpGet("{id}")]
     public async Task<ActionResult<MaterialReceiptResponseDto>> GetById(int id)
     {
-        var validation = ValidateOrganizationContext();
-        if (validation != null) return validation;
+        if (!TryValidateOrganizationContext(out var error))
+            return error!;
 
         var receipt = await _receiptService.GetByIdAsync(OrganizationId!.Value, id);
         if (receipt == null)
@@ -57,16 +57,10 @@ public class MaterialReceiptsController : BaseApiController
     {
         try
         {
-            var validation = ValidateOrganizationContext();
-            if (validation != null) return validation;
+            if (!TryValidateOrganizationContext(out var error))
+                return error!;
 
-            var ctx = new OrganizationContext
-            {
-                UserId = UserId!.Value,
-                OrganizationId = OrganizationId!.Value,
-                Role = OrganizationRole ?? "Member"
-            };
-
+            var ctx = GetOrganizationContext();
             var receipt = await _receiptService.CreateAsync(ctx, dto);
             return CreatedAtAction(nameof(GetById), new { id = receipt.Id }, receipt);
         }
@@ -84,16 +78,10 @@ public class MaterialReceiptsController : BaseApiController
     {
         try
         {
-            var validation = ValidateOrganizationContext();
-            if (validation != null) return validation;
+            if (!TryValidateOrganizationContext(out var error))
+                return error!;
 
-            var ctx = new OrganizationContext
-            {
-                UserId = UserId!.Value,
-                OrganizationId = OrganizationId!.Value,
-                Role = OrganizationRole ?? "Member"
-            };
-
+            var ctx = GetOrganizationContext();
             var receipt = await _receiptService.UpdateAsync(ctx, id, dto);
             if (receipt == null)
                 return NotFound(new { message = $"Поступление с ID {id} не найдено" });
@@ -114,16 +102,10 @@ public class MaterialReceiptsController : BaseApiController
     {
         try
         {
-            var validation = ValidateOrganizationContext();
-            if (validation != null) return validation;
+            if (!TryValidateOrganizationContext(out var error))
+                return error!;
 
-            var ctx = new OrganizationContext
-            {
-                UserId = UserId!.Value,
-                OrganizationId = OrganizationId!.Value,
-                Role = OrganizationRole ?? "Member"
-            };
-
+            var ctx = GetOrganizationContext();
             var result = await _receiptService.DeleteAsync(ctx, id, force);
             if (!result)
                 return NotFound(new { message = $"Поступление с ID {id} не найдено" });

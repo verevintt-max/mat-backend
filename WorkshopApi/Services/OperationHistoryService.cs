@@ -61,11 +61,12 @@ public class OperationHistoryService
         object? details = null,
         int? relatedOperationId = null)
     {
-        // This is a fallback for cases where organization context is not available
-        // Should only be used during migration period
+        // Get default organization (first one)
+        var defaultOrgId = await _context.Organizations.Select(o => o.Id).FirstOrDefaultAsync();
+        
         var history = new OperationHistory
         {
-            OrganizationId = 0, // Will need to be fixed during migration
+            OrganizationId = defaultOrgId > 0 ? defaultOrgId : 1,
             UserId = null,
             OperationType = operationType,
             EntityType = entityType,
@@ -82,6 +83,97 @@ public class OperationHistoryService
         await _context.SaveChangesAsync();
 
         return history.Id;
+    }
+
+    // Legacy method for backward compatibility (without organization context)
+    public async Task<PagedResultDto<OperationHistoryItemDto>> GetHistoryAsync(OperationHistoryFilterDto filter)
+    {
+        var query = _context.OperationHistory
+            .Include(h => h.User)
+            .AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(filter.OperationType))
+            query = query.Where(h => h.OperationType.Contains(filter.OperationType));
+
+        if (!string.IsNullOrWhiteSpace(filter.EntityType))
+            query = query.Where(h => h.EntityType == filter.EntityType);
+
+        if (filter.EntityId.HasValue)
+            query = query.Where(h => h.EntityId == filter.EntityId);
+
+        if (filter.DateFrom.HasValue)
+            query = query.Where(h => h.CreatedAt >= filter.DateFrom.Value);
+
+        if (filter.DateTo.HasValue)
+            query = query.Where(h => h.CreatedAt <= filter.DateTo.Value);
+
+        if (filter.IncludeCancelled != true)
+            query = query.Where(h => !h.IsCancelled);
+
+        var totalCount = await query.CountAsync();
+
+        var items = await query
+            .OrderByDescending(h => h.CreatedAt)
+            .Skip((filter.Page - 1) * filter.PageSize)
+            .Take(filter.PageSize)
+            .Select(h => new OperationHistoryItemDto
+            {
+                Id = h.Id,
+                OperationType = h.OperationType,
+                OperationTypeDisplay = GetOperationTypeDisplay(h.OperationType),
+                EntityType = h.EntityType,
+                EntityId = h.EntityId,
+                EntityName = h.EntityName,
+                Quantity = h.Quantity,
+                Amount = h.Amount,
+                Description = h.Description,
+                IsCancelled = h.IsCancelled,
+                CancelledAt = h.CancelledAt,
+                CreatedAt = h.CreatedAt,
+                CanCancel = !h.IsCancelled && CanCancelOperation(h.OperationType),
+                CanRestore = h.IsCancelled,
+                UserName = h.User != null ? h.User.FullName : null
+            })
+            .ToListAsync();
+
+        return new PagedResultDto<OperationHistoryItemDto>
+        {
+            Items = items,
+            TotalCount = totalCount,
+            Page = filter.Page,
+            PageSize = filter.PageSize,
+            TotalPages = (int)Math.Ceiling(totalCount / (double)filter.PageSize),
+            HasPreviousPage = filter.Page > 1,
+            HasNextPage = filter.Page * filter.PageSize < totalCount
+        };
+    }
+
+    // Legacy method for backward compatibility (without organization context)
+    public async Task<List<OperationHistoryItemDto>> GetRecentAsync(int count = 10)
+    {
+        return await _context.OperationHistory
+            .Include(h => h.User)
+            .Where(h => !h.IsCancelled)
+            .OrderByDescending(h => h.CreatedAt)
+            .Take(count)
+            .Select(h => new OperationHistoryItemDto
+            {
+                Id = h.Id,
+                OperationType = h.OperationType,
+                OperationTypeDisplay = GetOperationTypeDisplay(h.OperationType),
+                EntityType = h.EntityType,
+                EntityId = h.EntityId,
+                EntityName = h.EntityName,
+                Quantity = h.Quantity,
+                Amount = h.Amount,
+                Description = h.Description,
+                IsCancelled = h.IsCancelled,
+                CreatedAt = h.CreatedAt,
+                CanCancel = !h.IsCancelled && CanCancelOperation(h.OperationType),
+                CanRestore = h.IsCancelled,
+                UserName = h.User != null ? h.User.FullName : null
+            })
+            .ToListAsync();
     }
 
     public async Task<PagedResultDto<OperationHistoryItemDto>> GetHistoryAsync(int organizationId, OperationHistoryFilterDto filter)

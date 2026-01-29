@@ -26,8 +26,8 @@ public class MaterialsController : BaseApiController
         [FromQuery] string? category = null,
         [FromQuery] bool includeArchived = false)
     {
-        var validation = ValidateOrganizationContext();
-        if (validation != null) return validation;
+        if (!TryValidateOrganizationContext(out var error))
+            return error!;
 
         var materials = await _materialService.GetAllAsync(OrganizationId!.Value, search, category, includeArchived);
         return Ok(materials);
@@ -39,8 +39,8 @@ public class MaterialsController : BaseApiController
     [HttpGet("{id}")]
     public async Task<ActionResult<MaterialResponseDto>> GetById(int id)
     {
-        var validation = ValidateOrganizationContext();
-        if (validation != null) return validation;
+        if (!TryValidateOrganizationContext(out var error))
+            return error!;
 
         var material = await _materialService.GetByIdAsync(OrganizationId!.Value, id);
         if (material == null)
@@ -57,16 +57,10 @@ public class MaterialsController : BaseApiController
     {
         try
         {
-            var validation = ValidateOrganizationContext();
-            if (validation != null) return validation;
+            if (!TryValidateOrganizationContext(out var error))
+                return error!;
 
-            var ctx = new OrganizationContext
-            {
-                UserId = UserId!.Value,
-                OrganizationId = OrganizationId!.Value,
-                Role = OrganizationRole ?? "Member"
-            };
-
+            var ctx = GetOrganizationContext();
             var material = await _materialService.CreateAsync(ctx, dto);
             return CreatedAtAction(nameof(GetById), new { id = material.Id }, material);
         }
@@ -84,16 +78,10 @@ public class MaterialsController : BaseApiController
     {
         try
         {
-            var validation = ValidateOrganizationContext();
-            if (validation != null) return validation;
+            if (!TryValidateOrganizationContext(out var error))
+                return error!;
 
-            var ctx = new OrganizationContext
-            {
-                UserId = UserId!.Value,
-                OrganizationId = OrganizationId!.Value,
-                Role = OrganizationRole ?? "Member"
-            };
-
+            var ctx = GetOrganizationContext();
             var material = await _materialService.UpdateAsync(ctx, id, dto);
             if (material == null)
                 return NotFound(new { message = $"Материал с ID {id} не найден" });
@@ -114,16 +102,10 @@ public class MaterialsController : BaseApiController
     {
         try
         {
-            var validation = ValidateOrganizationContext();
-            if (validation != null) return validation;
+            if (!TryValidateOrganizationContext(out var error))
+                return error!;
 
-            var ctx = new OrganizationContext
-            {
-                UserId = UserId!.Value,
-                OrganizationId = OrganizationId!.Value,
-                Role = OrganizationRole ?? "Member"
-            };
-
+            var ctx = GetOrganizationContext();
             var result = await _materialService.DeleteAsync(ctx, id);
             if (!result)
                 return NotFound(new { message = $"Материал с ID {id} не найден" });
@@ -142,16 +124,10 @@ public class MaterialsController : BaseApiController
     [HttpPost("{id}/archive")]
     public async Task<ActionResult> Archive(int id)
     {
-        var validation = ValidateOrganizationContext();
-        if (validation != null) return validation;
+        if (!TryValidateOrganizationContext(out var error))
+            return error!;
 
-        var ctx = new OrganizationContext
-        {
-            UserId = UserId!.Value,
-            OrganizationId = OrganizationId!.Value,
-            Role = OrganizationRole ?? "Member"
-        };
-
+        var ctx = GetOrganizationContext();
         var result = await _materialService.ArchiveAsync(ctx, id);
         if (!result)
             return NotFound(new { message = $"Материал с ID {id} не найден" });
@@ -165,16 +141,10 @@ public class MaterialsController : BaseApiController
     [HttpPost("{id}/unarchive")]
     public async Task<ActionResult> Unarchive(int id)
     {
-        var validation = ValidateOrganizationContext();
-        if (validation != null) return validation;
+        if (!TryValidateOrganizationContext(out var error))
+            return error!;
 
-        var ctx = new OrganizationContext
-        {
-            UserId = UserId!.Value,
-            OrganizationId = OrganizationId!.Value,
-            Role = OrganizationRole ?? "Member"
-        };
-
+        var ctx = GetOrganizationContext();
         var result = await _materialService.UnarchiveAsync(ctx, id);
         if (!result)
             return NotFound(new { message = $"Материал с ID {id} не найден" });
@@ -188,8 +158,8 @@ public class MaterialsController : BaseApiController
     [HttpGet("categories")]
     public async Task<ActionResult<List<string>>> GetCategories()
     {
-        var validation = ValidateOrganizationContext();
-        if (validation != null) return validation;
+        if (!TryValidateOrganizationContext(out var error))
+            return error!;
 
         var categories = await _materialService.GetCategoriesAsync(OrganizationId!.Value);
         return Ok(categories);
@@ -201,8 +171,8 @@ public class MaterialsController : BaseApiController
     [HttpGet("balances")]
     public async Task<ActionResult<List<MaterialBalanceDto>>> GetBalances([FromQuery] bool includeZeroStock = false)
     {
-        var validation = ValidateOrganizationContext();
-        if (validation != null) return validation;
+        if (!TryValidateOrganizationContext(out var error))
+            return error!;
 
         var balances = await _materialService.GetAllBalancesAsync(OrganizationId!.Value, includeZeroStock);
         return Ok(balances);
@@ -216,8 +186,8 @@ public class MaterialsController : BaseApiController
     {
         try
         {
-            var validation = ValidateOrganizationContext();
-            if (validation != null) return validation;
+            if (!TryValidateOrganizationContext(out var error))
+                return error!;
 
             var balance = await _materialService.GetMaterialBalanceAsync(OrganizationId!.Value, id);
             return Ok(balance);
@@ -234,8 +204,8 @@ public class MaterialsController : BaseApiController
     [HttpGet("{id}/products")]
     public async Task<ActionResult<List<ProductListItemDto>>> GetProductsUsingMaterial(int id)
     {
-        var validation = ValidateOrganizationContext();
-        if (validation != null) return validation;
+        if (!TryValidateOrganizationContext(out var error))
+            return error!;
 
         var products = await _materialService.GetProductsUsingMaterialAsync(OrganizationId!.Value, id);
         return Ok(products);

@@ -17,6 +17,88 @@ public class MaterialService
         _historyService = historyService;
     }
 
+    // ==================== BACKWARD COMPATIBILITY METHODS ====================
+    // These methods are for services that don't have organization context yet
+    
+    /// <summary>
+    /// Get all balances (backward compatibility - no org filter)
+    /// </summary>
+    public async Task<List<MaterialBalanceDto>> GetAllBalancesAsync(bool includeZeroStock)
+    {
+        var materials = await _context.Materials
+            .Where(m => !m.IsArchived)
+            .OrderBy(m => m.Name)
+            .ToListAsync();
+
+        var result = new List<MaterialBalanceDto>();
+        foreach (var material in materials)
+        {
+            var balance = await GetMaterialBalanceInternalAsync(material);
+            if (includeZeroStock || balance.CurrentStock > 0)
+            {
+                result.Add(balance);
+            }
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// Get material balance (backward compatibility - no org filter)
+    /// </summary>
+    public async Task<MaterialBalanceDto> GetMaterialBalanceAsync(int materialId)
+    {
+        var material = await _context.Materials.FindAsync(materialId);
+        if (material == null)
+            throw new InvalidOperationException($"Материал с ID {materialId} не найден");
+
+        return await GetMaterialBalanceInternalAsync(material);
+    }
+
+    private async Task<MaterialBalanceDto> GetMaterialBalanceInternalAsync(Material material)
+    {
+        var receipts = await _context.MaterialReceipts
+            .Where(r => r.MaterialId == material.Id)
+            .Include(r => r.WriteOffs)
+            .ToListAsync();
+
+        decimal totalReceived = receipts.Sum(r => r.Quantity);
+        decimal totalWrittenOff = receipts.SelectMany(r => r.WriteOffs).Sum(w => w.Quantity);
+        decimal currentStock = totalReceived - totalWrittenOff;
+
+        decimal averagePrice = 0;
+        decimal totalValue = 0;
+
+        foreach (var receipt in receipts.OrderBy(r => r.ReceiptDate))
+        {
+            decimal usedFromReceipt = receipt.WriteOffs.Sum(w => w.Quantity);
+            decimal remainingInReceipt = receipt.Quantity - usedFromReceipt;
+
+            if (remainingInReceipt > 0)
+            {
+                totalValue += remainingInReceipt * receipt.UnitPrice;
+            }
+        }
+
+        if (currentStock > 0)
+            averagePrice = totalValue / currentStock;
+
+        return new MaterialBalanceDto
+        {
+            MaterialId = material.Id,
+            MaterialName = material.Name,
+            Unit = material.Unit,
+            Color = material.Color,
+            Category = material.Category,
+            CurrentStock = currentStock,
+            AveragePrice = Math.Round(averagePrice, 2),
+            TotalValue = Math.Round(totalValue, 2),
+            MinimumStock = material.MinimumStock,
+            IsBelowMinimum = material.MinimumStock.HasValue && currentStock < material.MinimumStock.Value
+        };
+    }
+
+    // ==================== ORGANIZATION-AWARE METHODS ====================
+
     public async Task<List<MaterialListItemDto>> GetAllAsync(int organizationId, string? search = null, string? category = null, bool includeArchived = false)
     {
         var query = _context.Materials
