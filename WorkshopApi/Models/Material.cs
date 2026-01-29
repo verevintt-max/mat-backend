@@ -11,6 +11,12 @@ public class Material
     [Key]
     public int Id { get; set; }
 
+    /// <summary>
+    /// ID организации, которой принадлежит материал
+    /// </summary>
+    [Required]
+    public int OrganizationId { get; set; }
+
     [Required]
     [MaxLength(200)]
     public string Name { get; set; } = string.Empty;
@@ -37,6 +43,9 @@ public class Material
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
     // Навигационные свойства
+    [ForeignKey("OrganizationId")]
+    public virtual Organization? Organization { get; set; }
+    
     public virtual ICollection<MaterialReceipt> Receipts { get; set; } = new List<MaterialReceipt>();
     public virtual ICollection<RecipeItem> RecipeItems { get; set; } = new List<RecipeItem>();
 }

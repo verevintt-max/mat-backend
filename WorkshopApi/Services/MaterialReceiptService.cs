@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using WorkshopApi.Controllers;
 using WorkshopApi.Data;
 using WorkshopApi.DTOs;
 using WorkshopApi.Models;
@@ -21,12 +22,12 @@ public class MaterialReceiptService
         _materialService = materialService;
     }
 
-    public async Task<List<MaterialReceiptListItemDto>> GetAllAsync(int? materialId = null, DateTime? dateFrom = null, DateTime? dateTo = null)
+    public async Task<List<MaterialReceiptListItemDto>> GetAllAsync(int organizationId, int? materialId = null, DateTime? dateFrom = null, DateTime? dateTo = null)
     {
         var query = _context.MaterialReceipts
             .Include(r => r.Material)
             .Include(r => r.WriteOffs)
-            .AsQueryable();
+            .Where(r => r.OrganizationId == organizationId);
 
         if (materialId.HasValue)
             query = query.Where(r => r.MaterialId == materialId.Value);
@@ -57,12 +58,12 @@ public class MaterialReceiptService
             .ToListAsync();
     }
 
-    public async Task<MaterialReceiptResponseDto?> GetByIdAsync(int id)
+    public async Task<MaterialReceiptResponseDto?> GetByIdAsync(int organizationId, int id)
     {
         var receipt = await _context.MaterialReceipts
             .Include(r => r.Material)
             .Include(r => r.WriteOffs)
-            .FirstOrDefaultAsync(r => r.Id == id);
+            .FirstOrDefaultAsync(r => r.Id == id && r.OrganizationId == organizationId);
 
         if (receipt == null) return null;
 
@@ -89,24 +90,27 @@ public class MaterialReceiptService
         };
     }
 
-    public async Task<MaterialReceiptResponseDto> CreateAsync(MaterialReceiptCreateDto dto)
+    public async Task<MaterialReceiptResponseDto> CreateAsync(OrganizationContext ctx, MaterialReceiptCreateDto dto)
     {
         int materialId = dto.MaterialId;
 
         // Если MaterialId = 0, создаем новый материал
         if (materialId == 0 && dto.NewMaterial != null)
         {
-            var newMaterial = await _materialService.CreateAsync(dto.NewMaterial);
+            var newMaterial = await _materialService.CreateAsync(ctx, dto.NewMaterial);
             materialId = newMaterial.Id;
         }
 
-        // Проверка существования материала
-        var material = await _context.Materials.FindAsync(materialId);
+        // Проверка существования материала в этой организации
+        var material = await _context.Materials
+            .FirstOrDefaultAsync(m => m.Id == materialId && m.OrganizationId == ctx.OrganizationId);
+        
         if (material == null)
             throw new InvalidOperationException($"Материал с ID {materialId} не найден");
 
         var receipt = new MaterialReceipt
         {
+            OrganizationId = ctx.OrganizationId,
             MaterialId = materialId,
             Quantity = dto.Quantity,
             ReceiptDate = dto.ReceiptDate ?? DateTime.UtcNow,
@@ -121,6 +125,7 @@ public class MaterialReceiptService
         await _context.SaveChangesAsync();
 
         await _historyService.LogAsync(
+            ctx,
             OperationTypes.MaterialReceiptCreate,
             "MaterialReceipt",
             receipt.Id,
@@ -130,15 +135,15 @@ public class MaterialReceiptService
             $"Поступление: {material.Name}, {receipt.Quantity} {material.Unit} по {receipt.UnitPrice} руб."
         );
 
-        return (await GetByIdAsync(receipt.Id))!;
+        return (await GetByIdAsync(ctx.OrganizationId, receipt.Id))!;
     }
 
-    public async Task<MaterialReceiptResponseDto?> UpdateAsync(int id, MaterialReceiptUpdateDto dto)
+    public async Task<MaterialReceiptResponseDto?> UpdateAsync(OrganizationContext ctx, int id, MaterialReceiptUpdateDto dto)
     {
         var receipt = await _context.MaterialReceipts
             .Include(r => r.WriteOffs)
             .Include(r => r.Material)
-            .FirstOrDefaultAsync(r => r.Id == id);
+            .FirstOrDefaultAsync(r => r.Id == id && r.OrganizationId == ctx.OrganizationId);
 
         if (receipt == null) return null;
 
@@ -151,7 +156,9 @@ public class MaterialReceiptService
 
         if (dto.MaterialId.HasValue)
         {
-            var material = await _context.Materials.FindAsync(dto.MaterialId.Value);
+            var material = await _context.Materials
+                .FirstOrDefaultAsync(m => m.Id == dto.MaterialId.Value && m.OrganizationId == ctx.OrganizationId);
+            
             if (material == null)
                 throw new InvalidOperationException($"Материал с ID {dto.MaterialId.Value} не найден");
 
@@ -178,6 +185,7 @@ public class MaterialReceiptService
         await _context.SaveChangesAsync();
 
         await _historyService.LogAsync(
+            ctx,
             OperationTypes.MaterialReceiptUpdate,
             "MaterialReceipt",
             receipt.Id,
@@ -187,15 +195,15 @@ public class MaterialReceiptService
             $"Изменено поступление: {receipt.Material.Name}"
         );
 
-        return await GetByIdAsync(id);
+        return await GetByIdAsync(ctx.OrganizationId, id);
     }
 
-    public async Task<bool> DeleteAsync(int id, bool force = false)
+    public async Task<bool> DeleteAsync(OrganizationContext ctx, int id, bool force = false)
     {
         var receipt = await _context.MaterialReceipts
             .Include(r => r.WriteOffs)
             .Include(r => r.Material)
-            .FirstOrDefaultAsync(r => r.Id == id);
+            .FirstOrDefaultAsync(r => r.Id == id && r.OrganizationId == ctx.OrganizationId);
 
         if (receipt == null) return false;
 
@@ -217,6 +225,7 @@ public class MaterialReceiptService
         await _context.SaveChangesAsync();
 
         await _historyService.LogAsync(
+            ctx,
             OperationTypes.MaterialReceiptDelete,
             "MaterialReceipt",
             id,

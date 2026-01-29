@@ -11,6 +11,12 @@ public class Product
     [Key]
     public int Id { get; set; }
 
+    /// <summary>
+    /// ID организации
+    /// </summary>
+    [Required]
+    public int OrganizationId { get; set; }
+
     [Required]
     [MaxLength(200)]
     public string Name { get; set; } = string.Empty;
@@ -63,6 +69,9 @@ public class Product
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
     // Навигационные свойства
+    [ForeignKey("OrganizationId")]
+    public virtual Organization? Organization { get; set; }
+
     public virtual ICollection<RecipeItem> RecipeItems { get; set; } = new List<RecipeItem>();
     public virtual ICollection<Production> Productions { get; set; } = new List<Production>();
 }

@@ -11,6 +11,12 @@ public class Production
     [Key]
     public int Id { get; set; }
 
+    /// <summary>
+    /// ID организации
+    /// </summary>
+    [Required]
+    public int OrganizationId { get; set; }
+
     [Required]
     public int ProductId { get; set; }
 
@@ -69,6 +75,9 @@ public class Production
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
     // Навигационные свойства
+    [ForeignKey("OrganizationId")]
+    public virtual Organization? Organization { get; set; }
+
     [ForeignKey(nameof(ProductId))]
     public virtual Product Product { get; set; } = null!;
 

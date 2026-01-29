@@ -1,4 +1,8 @@
+using System.Text;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Models;
 using WorkshopApi.Data;
 using WorkshopApi.Services;
 
@@ -20,6 +24,31 @@ builder.Services.AddSwaggerGen(c =>
         Version = "v1",
         Description = "API для системы учета мастерской - управление материалами, производством и продажами"
     });
+    
+    // Добавляем поддержку JWT в Swagger
+    c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Description = "JWT Authorization header using the Bearer scheme. Example: \"Authorization: Bearer {token}\"",
+        Name = "Authorization",
+        In = ParameterLocation.Header,
+        Type = SecuritySchemeType.ApiKey,
+        Scheme = "Bearer"
+    });
+    
+    c.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        {
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference
+                {
+                    Type = ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                }
+            },
+            Array.Empty<string>()
+        }
+    });
 });
 
 // Database - support DATABASE_URL from Render.com
@@ -38,7 +67,52 @@ if (!string.IsNullOrEmpty(connectionString) && connectionString.StartsWith("post
 builder.Services.AddDbContext<WorkshopDbContext>(options =>
     options.UseNpgsql(connectionString));
 
-// Services
+// JWT Authentication
+var jwtSettings = builder.Configuration.GetSection("Jwt");
+var secretKey = Environment.GetEnvironmentVariable("JWT_SECRET") ?? jwtSettings["Secret"] ?? "YourSuperSecretKeyThatShouldBeAtLeast32CharactersLong!";
+
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+})
+.AddJwtBearer(options =>
+{
+    options.RequireHttpsMetadata = false; // В production должно быть true
+    options.SaveToken = true;
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuerSigningKey = true,
+        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey)),
+        ValidateIssuer = true,
+        ValidIssuer = jwtSettings["Issuer"] ?? "WorkshopApi",
+        ValidateAudience = true,
+        ValidAudience = jwtSettings["Audience"] ?? "WorkshopApp",
+        ValidateLifetime = true,
+        ClockSkew = TimeSpan.Zero
+    };
+    
+    options.Events = new JwtBearerEvents
+    {
+        OnAuthenticationFailed = context =>
+        {
+            if (context.Exception.GetType() == typeof(SecurityTokenExpiredException))
+            {
+                context.Response.Headers.Add("Token-Expired", "true");
+            }
+            return Task.CompletedTask;
+        }
+    };
+});
+
+builder.Services.AddAuthorization();
+
+// Services - Auth & Organizations
+builder.Services.AddScoped<AuthService>();
+builder.Services.AddScoped<OrganizationService>();
+builder.Services.AddScoped<InvitationService>();
+
+// Services - Business Logic
 builder.Services.AddScoped<OperationHistoryService>();
 builder.Services.AddScoped<MaterialService>();
 builder.Services.AddScoped<MaterialReceiptService>();
@@ -108,6 +182,8 @@ app.UseSwaggerUI(c =>
 
 app.UseCors("AllowFrontend");
 
+// Authentication & Authorization
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
@@ -133,4 +209,3 @@ using (var scope = app.Services.CreateScope())
 }
 
 app.Run();
-

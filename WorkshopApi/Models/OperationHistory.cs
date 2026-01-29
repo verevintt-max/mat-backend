@@ -12,6 +12,17 @@ public class OperationHistory
     public int Id { get; set; }
 
     /// <summary>
+    /// ID организации
+    /// </summary>
+    [Required]
+    public int OrganizationId { get; set; }
+
+    /// <summary>
+    /// ID пользователя, выполнившего операцию
+    /// </summary>
+    public int? UserId { get; set; }
+
+    /// <summary>
     /// Тип операции: MaterialReceipt, Production, Sale, WriteOff, Cancel, Restore
     /// </summary>
     [Required]
@@ -68,6 +79,13 @@ public class OperationHistory
     public DateTime? CancelledAt { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    // Навигационные свойства
+    [ForeignKey("OrganizationId")]
+    public virtual Organization? Organization { get; set; }
+
+    [ForeignKey("UserId")]
+    public virtual User? User { get; set; }
 }
 
 /// <summary>

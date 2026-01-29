@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using WorkshopApi.DTOs;
 using WorkshopApi.Services;
@@ -6,7 +7,8 @@ namespace WorkshopApi.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class MaterialReceiptsController : ControllerBase
+[Authorize]
+public class MaterialReceiptsController : BaseApiController
 {
     private readonly MaterialReceiptService _receiptService;
 
@@ -24,7 +26,10 @@ public class MaterialReceiptsController : ControllerBase
         [FromQuery] DateTime? dateFrom = null,
         [FromQuery] DateTime? dateTo = null)
     {
-        var receipts = await _receiptService.GetAllAsync(materialId, dateFrom, dateTo);
+        var validation = ValidateOrganizationContext();
+        if (validation != null) return validation;
+
+        var receipts = await _receiptService.GetAllAsync(OrganizationId!.Value, materialId, dateFrom, dateTo);
         return Ok(receipts);
     }
 
@@ -34,7 +39,10 @@ public class MaterialReceiptsController : ControllerBase
     [HttpGet("{id}")]
     public async Task<ActionResult<MaterialReceiptResponseDto>> GetById(int id)
     {
-        var receipt = await _receiptService.GetByIdAsync(id);
+        var validation = ValidateOrganizationContext();
+        if (validation != null) return validation;
+
+        var receipt = await _receiptService.GetByIdAsync(OrganizationId!.Value, id);
         if (receipt == null)
             return NotFound(new { message = $"Поступление с ID {id} не найдено" });
 
@@ -49,7 +57,17 @@ public class MaterialReceiptsController : ControllerBase
     {
         try
         {
-            var receipt = await _receiptService.CreateAsync(dto);
+            var validation = ValidateOrganizationContext();
+            if (validation != null) return validation;
+
+            var ctx = new OrganizationContext
+            {
+                UserId = UserId!.Value,
+                OrganizationId = OrganizationId!.Value,
+                Role = OrganizationRole ?? "Member"
+            };
+
+            var receipt = await _receiptService.CreateAsync(ctx, dto);
             return CreatedAtAction(nameof(GetById), new { id = receipt.Id }, receipt);
         }
         catch (InvalidOperationException ex)
@@ -66,7 +84,17 @@ public class MaterialReceiptsController : ControllerBase
     {
         try
         {
-            var receipt = await _receiptService.UpdateAsync(id, dto);
+            var validation = ValidateOrganizationContext();
+            if (validation != null) return validation;
+
+            var ctx = new OrganizationContext
+            {
+                UserId = UserId!.Value,
+                OrganizationId = OrganizationId!.Value,
+                Role = OrganizationRole ?? "Member"
+            };
+
+            var receipt = await _receiptService.UpdateAsync(ctx, id, dto);
             if (receipt == null)
                 return NotFound(new { message = $"Поступление с ID {id} не найдено" });
 
@@ -86,7 +114,17 @@ public class MaterialReceiptsController : ControllerBase
     {
         try
         {
-            var result = await _receiptService.DeleteAsync(id, force);
+            var validation = ValidateOrganizationContext();
+            if (validation != null) return validation;
+
+            var ctx = new OrganizationContext
+            {
+                UserId = UserId!.Value,
+                OrganizationId = OrganizationId!.Value,
+                Role = OrganizationRole ?? "Member"
+            };
+
+            var result = await _receiptService.DeleteAsync(ctx, id, force);
             if (!result)
                 return NotFound(new { message = $"Поступление с ID {id} не найдено" });
 

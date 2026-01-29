@@ -64,6 +64,9 @@ public class FinishedProduct
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
     // Навигационные свойства
+    [ForeignKey("OrganizationId")]
+    public virtual Organization? Organization { get; set; }
+
     [ForeignKey(nameof(ProductionId))]
     public virtual Production Production { get; set; } = null!;
 }

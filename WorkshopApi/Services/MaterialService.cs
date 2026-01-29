@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using WorkshopApi.Controllers;
 using WorkshopApi.Data;
 using WorkshopApi.DTOs;
 using WorkshopApi.Models;
@@ -16,9 +17,10 @@ public class MaterialService
         _historyService = historyService;
     }
 
-    public async Task<List<MaterialListItemDto>> GetAllAsync(string? search = null, string? category = null, bool includeArchived = false)
+    public async Task<List<MaterialListItemDto>> GetAllAsync(int organizationId, string? search = null, string? category = null, bool includeArchived = false)
     {
-        var query = _context.Materials.AsQueryable();
+        var query = _context.Materials
+            .Where(m => m.OrganizationId == organizationId);
 
         if (!includeArchived)
             query = query.Where(m => !m.IsArchived);
@@ -35,7 +37,7 @@ public class MaterialService
         var result = new List<MaterialListItemDto>();
         foreach (var material in materials)
         {
-            var balance = await GetMaterialBalanceAsync(material.Id);
+            var balance = await GetMaterialBalanceAsync(organizationId, material.Id);
             result.Add(new MaterialListItemDto
             {
                 Id = material.Id,
@@ -53,15 +55,15 @@ public class MaterialService
         return result;
     }
 
-    public async Task<MaterialResponseDto?> GetByIdAsync(int id)
+    public async Task<MaterialResponseDto?> GetByIdAsync(int organizationId, int id)
     {
         var material = await _context.Materials
             .Include(m => m.RecipeItems)
-            .FirstOrDefaultAsync(m => m.Id == id);
+            .FirstOrDefaultAsync(m => m.Id == id && m.OrganizationId == organizationId);
 
         if (material == null) return null;
 
-        var balance = await GetMaterialBalanceAsync(id);
+        var balance = await GetMaterialBalanceAsync(organizationId, id);
 
         return new MaterialResponseDto
         {
@@ -83,10 +85,11 @@ public class MaterialService
         };
     }
 
-    public async Task<MaterialResponseDto> CreateAsync(MaterialCreateDto dto)
+    public async Task<MaterialResponseDto> CreateAsync(OrganizationContext ctx, MaterialCreateDto dto)
     {
-        // Проверка на дубликат
+        // Проверка на дубликат в рамках организации
         var exists = await _context.Materials.AnyAsync(m =>
+            m.OrganizationId == ctx.OrganizationId &&
             m.Name.ToLower() == dto.Name.ToLower() &&
             (m.Color ?? "") == (dto.Color ?? ""));
 
@@ -95,6 +98,7 @@ public class MaterialService
 
         var material = new Material
         {
+            OrganizationId = ctx.OrganizationId,
             Name = dto.Name,
             Unit = dto.Unit,
             Color = dto.Color,
@@ -107,6 +111,7 @@ public class MaterialService
         await _context.SaveChangesAsync();
 
         await _historyService.LogAsync(
+            ctx,
             OperationTypes.MaterialCreate,
             "Material",
             material.Id,
@@ -114,12 +119,14 @@ public class MaterialService
             description: $"Создан материал: {material.Name}"
         );
 
-        return (await GetByIdAsync(material.Id))!;
+        return (await GetByIdAsync(ctx.OrganizationId, material.Id))!;
     }
 
-    public async Task<MaterialResponseDto?> UpdateAsync(int id, MaterialUpdateDto dto)
+    public async Task<MaterialResponseDto?> UpdateAsync(OrganizationContext ctx, int id, MaterialUpdateDto dto)
     {
-        var material = await _context.Materials.FindAsync(id);
+        var material = await _context.Materials
+            .FirstOrDefaultAsync(m => m.Id == id && m.OrganizationId == ctx.OrganizationId);
+        
         if (material == null) return null;
 
         // Проверка на дубликат при изменении имени или цвета
@@ -129,6 +136,7 @@ public class MaterialService
             var newColor = dto.Color ?? material.Color;
 
             var exists = await _context.Materials.AnyAsync(m =>
+                m.OrganizationId == ctx.OrganizationId &&
                 m.Id != id &&
                 m.Name.ToLower() == newName.ToLower() &&
                 (m.Color ?? "") == (newColor ?? ""));
@@ -149,6 +157,7 @@ public class MaterialService
         await _context.SaveChangesAsync();
 
         await _historyService.LogAsync(
+            ctx,
             OperationTypes.MaterialUpdate,
             "Material",
             material.Id,
@@ -156,15 +165,15 @@ public class MaterialService
             description: $"Обновлен материал: {material.Name}"
         );
 
-        return await GetByIdAsync(id);
+        return await GetByIdAsync(ctx.OrganizationId, id);
     }
 
-    public async Task<bool> DeleteAsync(int id)
+    public async Task<bool> DeleteAsync(OrganizationContext ctx, int id)
     {
         var material = await _context.Materials
             .Include(m => m.Receipts)
             .Include(m => m.RecipeItems)
-            .FirstOrDefaultAsync(m => m.Id == id);
+            .FirstOrDefaultAsync(m => m.Id == id && m.OrganizationId == ctx.OrganizationId);
 
         if (material == null) return false;
 
@@ -173,6 +182,7 @@ public class MaterialService
             throw new InvalidOperationException("Невозможно удалить материал, который используется в поступлениях или рецептах. Используйте архивирование.");
 
         await _historyService.LogAsync(
+            ctx,
             OperationTypes.MaterialDelete,
             "Material",
             material.Id,
@@ -186,27 +196,55 @@ public class MaterialService
         return true;
     }
 
-    public async Task<List<string>> GetCategoriesAsync()
+    public async Task<bool> ArchiveAsync(OrganizationContext ctx, int id)
+    {
+        var material = await _context.Materials
+            .FirstOrDefaultAsync(m => m.Id == id && m.OrganizationId == ctx.OrganizationId);
+        
+        if (material == null) return false;
+
+        material.IsArchived = true;
+        material.UpdatedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync();
+
+        return true;
+    }
+
+    public async Task<bool> UnarchiveAsync(OrganizationContext ctx, int id)
+    {
+        var material = await _context.Materials
+            .FirstOrDefaultAsync(m => m.Id == id && m.OrganizationId == ctx.OrganizationId);
+        
+        if (material == null) return false;
+
+        material.IsArchived = false;
+        material.UpdatedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync();
+
+        return true;
+    }
+
+    public async Task<List<string>> GetCategoriesAsync(int organizationId)
     {
         return await _context.Materials
-            .Where(m => m.Category != null && m.Category != "")
+            .Where(m => m.OrganizationId == organizationId && m.Category != null && m.Category != "")
             .Select(m => m.Category!)
             .Distinct()
             .OrderBy(c => c)
             .ToListAsync();
     }
 
-    public async Task<List<MaterialBalanceDto>> GetAllBalancesAsync(bool includeZeroStock = false)
+    public async Task<List<MaterialBalanceDto>> GetAllBalancesAsync(int organizationId, bool includeZeroStock = false)
     {
         var materials = await _context.Materials
-            .Where(m => !m.IsArchived)
+            .Where(m => m.OrganizationId == organizationId && !m.IsArchived)
             .OrderBy(m => m.Name)
             .ToListAsync();
 
         var result = new List<MaterialBalanceDto>();
         foreach (var material in materials)
         {
-            var balance = await GetMaterialBalanceAsync(material.Id);
+            var balance = await GetMaterialBalanceAsync(organizationId, material.Id);
             if (includeZeroStock || balance.CurrentStock > 0)
             {
                 result.Add(balance);
@@ -216,15 +254,17 @@ public class MaterialService
         return result;
     }
 
-    public async Task<MaterialBalanceDto> GetMaterialBalanceAsync(int materialId)
+    public async Task<MaterialBalanceDto> GetMaterialBalanceAsync(int organizationId, int materialId)
     {
-        var material = await _context.Materials.FindAsync(materialId);
+        var material = await _context.Materials
+            .FirstOrDefaultAsync(m => m.Id == materialId && m.OrganizationId == organizationId);
+        
         if (material == null)
             throw new InvalidOperationException($"Материал с ID {materialId} не найден");
 
         // Получаем все поступления
         var receipts = await _context.MaterialReceipts
-            .Where(r => r.MaterialId == materialId)
+            .Where(r => r.MaterialId == materialId && r.OrganizationId == organizationId)
             .Include(r => r.WriteOffs)
             .ToListAsync();
 
@@ -268,10 +308,10 @@ public class MaterialService
     /// <summary>
     /// Получить список изделий, в которых используется материал
     /// </summary>
-    public async Task<List<ProductListItemDto>> GetProductsUsingMaterialAsync(int materialId)
+    public async Task<List<ProductListItemDto>> GetProductsUsingMaterialAsync(int organizationId, int materialId)
     {
         var products = await _context.RecipeItems
-            .Where(r => r.MaterialId == materialId)
+            .Where(r => r.MaterialId == materialId && r.Product.OrganizationId == organizationId)
             .Include(r => r.Product)
             .Select(r => r.Product)
             .Distinct()

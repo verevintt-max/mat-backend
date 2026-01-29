@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using WorkshopApi.DTOs;
 using WorkshopApi.Services;
@@ -6,7 +7,8 @@ namespace WorkshopApi.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class MaterialsController : ControllerBase
+[Authorize]
+public class MaterialsController : BaseApiController
 {
     private readonly MaterialService _materialService;
 
@@ -24,7 +26,10 @@ public class MaterialsController : ControllerBase
         [FromQuery] string? category = null,
         [FromQuery] bool includeArchived = false)
     {
-        var materials = await _materialService.GetAllAsync(search, category, includeArchived);
+        var validation = ValidateOrganizationContext();
+        if (validation != null) return validation;
+
+        var materials = await _materialService.GetAllAsync(OrganizationId!.Value, search, category, includeArchived);
         return Ok(materials);
     }
 
@@ -34,7 +39,10 @@ public class MaterialsController : ControllerBase
     [HttpGet("{id}")]
     public async Task<ActionResult<MaterialResponseDto>> GetById(int id)
     {
-        var material = await _materialService.GetByIdAsync(id);
+        var validation = ValidateOrganizationContext();
+        if (validation != null) return validation;
+
+        var material = await _materialService.GetByIdAsync(OrganizationId!.Value, id);
         if (material == null)
             return NotFound(new { message = $"Материал с ID {id} не найден" });
 
@@ -49,7 +57,17 @@ public class MaterialsController : ControllerBase
     {
         try
         {
-            var material = await _materialService.CreateAsync(dto);
+            var validation = ValidateOrganizationContext();
+            if (validation != null) return validation;
+
+            var ctx = new OrganizationContext
+            {
+                UserId = UserId!.Value,
+                OrganizationId = OrganizationId!.Value,
+                Role = OrganizationRole ?? "Member"
+            };
+
+            var material = await _materialService.CreateAsync(ctx, dto);
             return CreatedAtAction(nameof(GetById), new { id = material.Id }, material);
         }
         catch (InvalidOperationException ex)
@@ -66,7 +84,17 @@ public class MaterialsController : ControllerBase
     {
         try
         {
-            var material = await _materialService.UpdateAsync(id, dto);
+            var validation = ValidateOrganizationContext();
+            if (validation != null) return validation;
+
+            var ctx = new OrganizationContext
+            {
+                UserId = UserId!.Value,
+                OrganizationId = OrganizationId!.Value,
+                Role = OrganizationRole ?? "Member"
+            };
+
+            var material = await _materialService.UpdateAsync(ctx, id, dto);
             if (material == null)
                 return NotFound(new { message = $"Материал с ID {id} не найден" });
 
@@ -86,7 +114,17 @@ public class MaterialsController : ControllerBase
     {
         try
         {
-            var result = await _materialService.DeleteAsync(id);
+            var validation = ValidateOrganizationContext();
+            if (validation != null) return validation;
+
+            var ctx = new OrganizationContext
+            {
+                UserId = UserId!.Value,
+                OrganizationId = OrganizationId!.Value,
+                Role = OrganizationRole ?? "Member"
+            };
+
+            var result = await _materialService.DeleteAsync(ctx, id);
             if (!result)
                 return NotFound(new { message = $"Материал с ID {id} не найден" });
 
@@ -102,26 +140,46 @@ public class MaterialsController : ControllerBase
     /// Архивировать материал
     /// </summary>
     [HttpPost("{id}/archive")]
-    public async Task<ActionResult<MaterialResponseDto>> Archive(int id)
+    public async Task<ActionResult> Archive(int id)
     {
-        var material = await _materialService.UpdateAsync(id, new MaterialUpdateDto { IsArchived = true });
-        if (material == null)
+        var validation = ValidateOrganizationContext();
+        if (validation != null) return validation;
+
+        var ctx = new OrganizationContext
+        {
+            UserId = UserId!.Value,
+            OrganizationId = OrganizationId!.Value,
+            Role = OrganizationRole ?? "Member"
+        };
+
+        var result = await _materialService.ArchiveAsync(ctx, id);
+        if (!result)
             return NotFound(new { message = $"Материал с ID {id} не найден" });
 
-        return Ok(material);
+        return Ok(new { message = "Материал архивирован" });
     }
 
     /// <summary>
     /// Разархивировать материал
     /// </summary>
     [HttpPost("{id}/unarchive")]
-    public async Task<ActionResult<MaterialResponseDto>> Unarchive(int id)
+    public async Task<ActionResult> Unarchive(int id)
     {
-        var material = await _materialService.UpdateAsync(id, new MaterialUpdateDto { IsArchived = false });
-        if (material == null)
+        var validation = ValidateOrganizationContext();
+        if (validation != null) return validation;
+
+        var ctx = new OrganizationContext
+        {
+            UserId = UserId!.Value,
+            OrganizationId = OrganizationId!.Value,
+            Role = OrganizationRole ?? "Member"
+        };
+
+        var result = await _materialService.UnarchiveAsync(ctx, id);
+        if (!result)
             return NotFound(new { message = $"Материал с ID {id} не найден" });
 
-        return Ok(material);
+        return Ok(new { message = "Материал разархивирован" });
     }
 
     /// <summary>
@@ -130,7 +188,10 @@ public class MaterialsController : ControllerBase
     [HttpGet("categories")]
     public async Task<ActionResult<List<string>>> GetCategories()
     {
-        var categories = await _materialService.GetCategoriesAsync();
+        var validation = ValidateOrganizationContext();
+        if (validation != null) return validation;
+
+        var categories = await _materialService.GetCategoriesAsync(OrganizationId!.Value);
         return Ok(categories);
     }
 
@@ -140,7 +201,10 @@ public class MaterialsController : ControllerBase
     [HttpGet("balances")]
     public async Task<ActionResult<List<MaterialBalanceDto>>> GetBalances([FromQuery] bool includeZeroStock = false)
     {
-        var balances = await _materialService.GetAllBalancesAsync(includeZeroStock);
+        var validation = ValidateOrganizationContext();
+        if (validation != null) return validation;
+
+        var balances = await _materialService.GetAllBalancesAsync(OrganizationId!.Value, includeZeroStock);
         return Ok(balances);
     }
 
@@ -152,7 +216,10 @@ public class MaterialsController : ControllerBase
     {
         try
         {
-            var balance = await _materialService.GetMaterialBalanceAsync(id);
+            var validation = ValidateOrganizationContext();
+            if (validation != null) return validation;
+
+            var balance = await _materialService.GetMaterialBalanceAsync(OrganizationId!.Value, id);
             return Ok(balance);
         }
         catch (InvalidOperationException ex)
@@ -167,7 +234,10 @@ public class MaterialsController : ControllerBase
     [HttpGet("{id}/products")]
     public async Task<ActionResult<List<ProductListItemDto>>> GetProductsUsingMaterial(int id)
     {
-        var products = await _materialService.GetProductsUsingMaterialAsync(id);
+        var validation = ValidateOrganizationContext();
+        if (validation != null) return validation;
+
+        var products = await _materialService.GetProductsUsingMaterialAsync(OrganizationId!.Value, id);
         return Ok(products);
     }
 }

@@ -11,6 +11,12 @@ public class MaterialReceipt
     [Key]
     public int Id { get; set; }
 
+    /// <summary>
+    /// ID организации
+    /// </summary>
+    [Required]
+    public int OrganizationId { get; set; }
+
     [Required]
     public int MaterialId { get; set; }
 
@@ -42,6 +48,9 @@ public class MaterialReceipt
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
     // Навигационные свойства
+    [ForeignKey("OrganizationId")]
+    public virtual Organization? Organization { get; set; }
+
     [ForeignKey(nameof(MaterialId))]
     public virtual Material Material { get; set; } = null!;
 

@@ -18,6 +18,7 @@ public class OperationHistoryItemDto
     public DateTime CreatedAt { get; set; }
     public bool CanCancel { get; set; }
     public bool CanRestore { get; set; }
+    public string? UserName { get; set; }
 }
 
 public class OperationHistoryFilterDto

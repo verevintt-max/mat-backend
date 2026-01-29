@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using WorkshopApi.Controllers;
 using WorkshopApi.Data;
 using WorkshopApi.DTOs;
 using WorkshopApi.Models;
@@ -16,6 +17,7 @@ public class OperationHistoryService
     }
 
     public async Task<int> LogAsync(
+        OrganizationContext ctx,
         string operationType,
         string? entityType = null,
         int? entityId = null,
@@ -28,6 +30,8 @@ public class OperationHistoryService
     {
         var history = new OperationHistory
         {
+            OrganizationId = ctx.OrganizationId,
+            UserId = ctx.UserId,
             OperationType = operationType,
             EntityType = entityType,
             EntityId = entityId,
@@ -45,9 +49,46 @@ public class OperationHistoryService
         return history.Id;
     }
 
-    public async Task<PagedResultDto<OperationHistoryItemDto>> GetHistoryAsync(OperationHistoryFilterDto filter)
+    // Legacy method for backward compatibility (without organization context)
+    public async Task<int> LogAsync(
+        string operationType,
+        string? entityType = null,
+        int? entityId = null,
+        string? entityName = null,
+        decimal? quantity = null,
+        decimal? amount = null,
+        string? description = null,
+        object? details = null,
+        int? relatedOperationId = null)
     {
-        var query = _context.OperationHistory.AsQueryable();
+        // This is a fallback for cases where organization context is not available
+        // Should only be used during migration period
+        var history = new OperationHistory
+        {
+            OrganizationId = 0, // Will need to be fixed during migration
+            UserId = null,
+            OperationType = operationType,
+            EntityType = entityType,
+            EntityId = entityId,
+            EntityName = entityName,
+            Quantity = quantity,
+            Amount = amount,
+            Description = description,
+            Details = details != null ? JsonSerializer.Serialize(details) : null,
+            RelatedOperationId = relatedOperationId
+        };
+
+        _context.OperationHistory.Add(history);
+        await _context.SaveChangesAsync();
+
+        return history.Id;
+    }
+
+    public async Task<PagedResultDto<OperationHistoryItemDto>> GetHistoryAsync(int organizationId, OperationHistoryFilterDto filter)
+    {
+        var query = _context.OperationHistory
+            .Include(h => h.User)
+            .Where(h => h.OrganizationId == organizationId);
 
         if (!string.IsNullOrWhiteSpace(filter.OperationType))
             query = query.Where(h => h.OperationType.Contains(filter.OperationType));
@@ -88,7 +129,8 @@ public class OperationHistoryService
                 CancelledAt = h.CancelledAt,
                 CreatedAt = h.CreatedAt,
                 CanCancel = !h.IsCancelled && CanCancelOperation(h.OperationType),
-                CanRestore = h.IsCancelled
+                CanRestore = h.IsCancelled,
+                UserName = h.User != null ? h.User.FullName : null
             })
             .ToListAsync();
 
@@ -104,10 +146,11 @@ public class OperationHistoryService
         };
     }
 
-    public async Task<List<OperationHistoryItemDto>> GetRecentAsync(int count = 10)
+    public async Task<List<OperationHistoryItemDto>> GetRecentAsync(int organizationId, int count = 10)
     {
         return await _context.OperationHistory
-            .Where(h => !h.IsCancelled)
+            .Include(h => h.User)
+            .Where(h => h.OrganizationId == organizationId && !h.IsCancelled)
             .OrderByDescending(h => h.CreatedAt)
             .Take(count)
             .Select(h => new OperationHistoryItemDto
@@ -124,14 +167,17 @@ public class OperationHistoryService
                 IsCancelled = h.IsCancelled,
                 CreatedAt = h.CreatedAt,
                 CanCancel = !h.IsCancelled && CanCancelOperation(h.OperationType),
-                CanRestore = h.IsCancelled
+                CanRestore = h.IsCancelled,
+                UserName = h.User != null ? h.User.FullName : null
             })
             .ToListAsync();
     }
 
-    public async Task<bool> MarkAsCancelledAsync(int id)
+    public async Task<bool> MarkAsCancelledAsync(int organizationId, int id)
     {
-        var history = await _context.OperationHistory.FindAsync(id);
+        var history = await _context.OperationHistory
+            .FirstOrDefaultAsync(h => h.Id == id && h.OrganizationId == organizationId);
+        
         if (history == null) return false;
 
         history.IsCancelled = true;
