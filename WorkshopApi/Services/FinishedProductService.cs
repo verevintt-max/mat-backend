@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using WorkshopApi.Controllers;
 using WorkshopApi.Data;
 using WorkshopApi.DTOs;
 using WorkshopApi.Models;
@@ -16,9 +17,10 @@ public class FinishedProductService
         _historyService = historyService;
     }
 
-    public async Task<List<FinishedProductListItemDto>> GetAllAsync(string? status = null, int? productId = null, DateTime? dateFrom = null, DateTime? dateTo = null)
+    public async Task<List<FinishedProductListItemDto>> GetAllAsync(int organizationId, string? status = null, int? productId = null, DateTime? dateFrom = null, DateTime? dateTo = null)
     {
         var query = _context.FinishedProducts
+            .Where(fp => fp.OrganizationId == organizationId)
             .Include(fp => fp.Production)
                 .ThenInclude(p => p.Product)
             .AsQueryable();
@@ -56,9 +58,10 @@ public class FinishedProductService
             .ToListAsync();
     }
 
-    public async Task<FinishedProductResponseDto?> GetByIdAsync(int id)
+    public async Task<FinishedProductResponseDto?> GetByIdAsync(int organizationId, int id)
     {
         var fp = await _context.FinishedProducts
+            .Where(f => f.OrganizationId == organizationId)
             .Include(f => f.Production)
                 .ThenInclude(p => p.Product)
             .FirstOrDefaultAsync(f => f.Id == id);
@@ -71,9 +74,10 @@ public class FinishedProductService
     /// <summary>
     /// Продажа изделия
     /// </summary>
-    public async Task<FinishedProductResponseDto?> SellAsync(int id, SellProductDto dto)
+    public async Task<FinishedProductResponseDto?> SellAsync(OrganizationContext ctx, int id, SellProductDto dto)
     {
         var fp = await _context.FinishedProducts
+            .Where(f => f.OrganizationId == ctx.OrganizationId)
             .Include(f => f.Production)
                 .ThenInclude(p => p.Product)
             .FirstOrDefaultAsync(f => f.Id == id);
@@ -95,6 +99,7 @@ public class FinishedProductService
         var profit = dto.SalePrice - fp.CostPerUnit;
 
         await _historyService.LogAsync(
+            ctx,
             OperationTypes.Sale,
             "FinishedProduct",
             fp.Id,
@@ -110,9 +115,10 @@ public class FinishedProductService
     /// <summary>
     /// Списание изделия как брак
     /// </summary>
-    public async Task<FinishedProductResponseDto?> WriteOffAsync(int id, WriteOffProductDto dto)
+    public async Task<FinishedProductResponseDto?> WriteOffAsync(OrganizationContext ctx, int id, WriteOffProductDto dto)
     {
         var fp = await _context.FinishedProducts
+            .Where(f => f.OrganizationId == ctx.OrganizationId)
             .Include(f => f.Production)
                 .ThenInclude(p => p.Product)
             .FirstOrDefaultAsync(f => f.Id == id);
@@ -131,6 +137,7 @@ public class FinishedProductService
         await _context.SaveChangesAsync();
 
         await _historyService.LogAsync(
+            ctx,
             OperationTypes.WriteOff,
             "FinishedProduct",
             fp.Id,
@@ -146,9 +153,10 @@ public class FinishedProductService
     /// <summary>
     /// Возврат на склад
     /// </summary>
-    public async Task<FinishedProductResponseDto?> ReturnToStockAsync(int id)
+    public async Task<FinishedProductResponseDto?> ReturnToStockAsync(OrganizationContext ctx, int id)
     {
         var fp = await _context.FinishedProducts
+            .Where(f => f.OrganizationId == ctx.OrganizationId)
             .Include(f => f.Production)
                 .ThenInclude(p => p.Product)
             .FirstOrDefaultAsync(f => f.Id == id);
@@ -171,6 +179,7 @@ public class FinishedProductService
         await _context.SaveChangesAsync();
 
         await _historyService.LogAsync(
+            ctx,
             OperationTypes.ReturnToStock,
             "FinishedProduct",
             fp.Id,
@@ -186,9 +195,10 @@ public class FinishedProductService
     /// <summary>
     /// Обновление данных о продаже/списании
     /// </summary>
-    public async Task<FinishedProductResponseDto?> UpdateAsync(int id, FinishedProductUpdateDto dto)
+    public async Task<FinishedProductResponseDto?> UpdateAsync(OrganizationContext ctx, int id, FinishedProductUpdateDto dto)
     {
         var fp = await _context.FinishedProducts
+            .Where(f => f.OrganizationId == ctx.OrganizationId)
             .Include(f => f.Production)
                 .ThenInclude(p => p.Product)
             .FirstOrDefaultAsync(f => f.Id == id);
@@ -210,6 +220,28 @@ public class FinishedProductService
     /// <summary>
     /// Получить сводку по готовой продукции
     /// </summary>
+    public async Task<FinishedProductSummaryDto> GetSummaryAsync(int organizationId)
+    {
+        var products = await _context.FinishedProducts
+            .Where(fp => fp.OrganizationId == organizationId)
+            .ToListAsync();
+
+        var inStock = products.Where(fp => fp.Status == FinishedProductStatus.InStock).ToList();
+        var sold = products.Where(fp => fp.Status == FinishedProductStatus.Sold).ToList();
+        var writtenOff = products.Where(fp => fp.Status == FinishedProductStatus.WrittenOff).ToList();
+
+        return new FinishedProductSummaryDto
+        {
+            TotalInStock = inStock.Count,
+            TotalSold = sold.Count,
+            TotalWrittenOff = writtenOff.Count,
+            TotalInStockValue = inStock.Sum(fp => fp.CostPerUnit),
+            TotalSalesAmount = sold.Sum(fp => fp.SalePrice ?? 0),
+            TotalProfit = sold.Sum(fp => (fp.SalePrice ?? 0) - fp.CostPerUnit)
+        };
+    }
+
+    // Backward compatibility for services without org context
     public async Task<FinishedProductSummaryDto> GetSummaryAsync()
     {
         var products = await _context.FinishedProducts.ToListAsync();

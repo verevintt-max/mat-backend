@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using WorkshopApi.DTOs;
 using WorkshopApi.Services;
@@ -6,7 +7,8 @@ namespace WorkshopApi.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class HistoryController : ControllerBase
+[Authorize]
+public class HistoryController : BaseApiController
 {
     private readonly OperationHistoryService _historyService;
 
@@ -29,6 +31,9 @@ public class HistoryController : ControllerBase
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 50)
     {
+        if (!TryValidateOrganizationContext(out var error))
+            return error!;
+
         var filter = new OperationHistoryFilterDto
         {
             OperationType = operationType,
@@ -41,7 +46,7 @@ public class HistoryController : ControllerBase
             PageSize = pageSize
         };
 
-        var result = await _historyService.GetHistoryAsync(filter);
+        var result = await _historyService.GetHistoryAsync(OrganizationId!.Value, filter);
         return Ok(result);
     }
 
@@ -51,7 +56,10 @@ public class HistoryController : ControllerBase
     [HttpGet("recent")]
     public async Task<ActionResult<List<OperationHistoryItemDto>>> GetRecent([FromQuery] int count = 10)
     {
-        var operations = await _historyService.GetRecentAsync(count);
+        if (!TryValidateOrganizationContext(out var error))
+            return error!;
+
+        var operations = await _historyService.GetRecentAsync(OrganizationId!.Value, count);
         return Ok(operations);
     }
 }

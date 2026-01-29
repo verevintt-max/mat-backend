@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using WorkshopApi.DTOs;
 using WorkshopApi.Services;
@@ -6,7 +7,8 @@ namespace WorkshopApi.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class ReportsController : ControllerBase
+[Authorize]
+public class ReportsController : BaseApiController
 {
     private readonly ReportService _reportService;
 
@@ -21,7 +23,10 @@ public class ReportsController : ControllerBase
     [HttpGet("dashboard")]
     public async Task<ActionResult<DashboardDto>> GetDashboard()
     {
-        var dashboard = await _reportService.GetDashboardAsync();
+        if (!TryValidateOrganizationContext(out var error))
+            return error!;
+
+        var dashboard = await _reportService.GetDashboardAsync(OrganizationId!.Value);
         return Ok(dashboard);
     }
 
@@ -36,7 +41,10 @@ public class ReportsController : ControllerBase
     {
         try
         {
-            var report = await _reportService.GetMaterialMovementReportAsync(materialId, dateFrom, dateTo);
+            if (!TryValidateOrganizationContext(out var error))
+                return error!;
+
+            var report = await _reportService.GetMaterialMovementReportAsync(OrganizationId!.Value, materialId, dateFrom, dateTo);
             return Ok(report);
         }
         catch (InvalidOperationException ex)
@@ -53,7 +61,10 @@ public class ReportsController : ControllerBase
         [FromQuery] DateTime dateFrom,
         [FromQuery] DateTime dateTo)
     {
-        var report = await _reportService.GetProductionReportAsync(dateFrom, dateTo);
+        if (!TryValidateOrganizationContext(out var error))
+            return error!;
+
+        var report = await _reportService.GetProductionReportAsync(OrganizationId!.Value, dateFrom, dateTo);
         return Ok(report);
     }
 
@@ -65,7 +76,10 @@ public class ReportsController : ControllerBase
         [FromQuery] DateTime dateFrom,
         [FromQuery] DateTime dateTo)
     {
-        var report = await _reportService.GetSalesReportAsync(dateFrom, dateTo);
+        if (!TryValidateOrganizationContext(out var error))
+            return error!;
+
+        var report = await _reportService.GetSalesReportAsync(OrganizationId!.Value, dateFrom, dateTo);
         return Ok(report);
     }
 
@@ -77,7 +91,10 @@ public class ReportsController : ControllerBase
         [FromQuery] DateTime dateFrom,
         [FromQuery] DateTime dateTo)
     {
-        var report = await _reportService.GetFinancialSummaryAsync(dateFrom, dateTo);
+        if (!TryValidateOrganizationContext(out var error))
+            return error!;
+
+        var report = await _reportService.GetFinancialSummaryAsync(OrganizationId!.Value, dateFrom, dateTo);
         return Ok(report);
     }
 }

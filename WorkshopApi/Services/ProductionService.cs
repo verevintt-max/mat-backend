@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using WorkshopApi.Controllers;
 using WorkshopApi.Data;
 using WorkshopApi.DTOs;
 using WorkshopApi.Models;
@@ -21,9 +22,10 @@ public class ProductionService
         _materialService = materialService;
     }
 
-    public async Task<List<ProductionListItemDto>> GetAllAsync(int? productId = null, DateTime? dateFrom = null, DateTime? dateTo = null, bool includeCancelled = false)
+    public async Task<List<ProductionListItemDto>> GetAllAsync(int organizationId, int? productId = null, DateTime? dateFrom = null, DateTime? dateTo = null, bool includeCancelled = false)
     {
         var query = _context.Productions
+            .Where(p => p.OrganizationId == organizationId)
             .Include(p => p.Product)
             .Include(p => p.FinishedProducts)
             .AsQueryable();
@@ -61,9 +63,10 @@ public class ProductionService
             .ToListAsync();
     }
 
-    public async Task<ProductionResponseDto?> GetByIdAsync(int id)
+    public async Task<ProductionResponseDto?> GetByIdAsync(int organizationId, int id)
     {
         var production = await _context.Productions
+            .Where(p => p.OrganizationId == organizationId)
             .Include(p => p.Product)
             .Include(p => p.MaterialWriteOffs)
                 .ThenInclude(w => w.Material)
@@ -111,9 +114,10 @@ public class ProductionService
     /// <summary>
     /// Проверка наличия материалов для производства
     /// </summary>
-    public async Task<ProductionCheckResultDto> CheckAvailabilityAsync(int productId, int quantity)
+    public async Task<ProductionCheckResultDto> CheckAvailabilityAsync(int organizationId, int productId, int quantity)
     {
         var product = await _context.Products
+            .Where(p => p.OrganizationId == organizationId)
             .Include(p => p.RecipeItems)
                 .ThenInclude(r => r.Material)
             .FirstOrDefaultAsync(p => p.Id == productId);
@@ -164,14 +168,15 @@ public class ProductionService
     /// <summary>
     /// Создание производства с автоматическим списанием материалов (FIFO)
     /// </summary>
-    public async Task<ProductionResponseDto> CreateAsync(ProductionCreateDto dto)
+    public async Task<ProductionResponseDto> CreateAsync(OrganizationContext ctx, ProductionCreateDto dto)
     {
         // Проверяем доступность
-        var check = await CheckAvailabilityAsync(dto.ProductId, dto.Quantity);
+        var check = await CheckAvailabilityAsync(ctx.OrganizationId, dto.ProductId, dto.Quantity);
         if (!check.CanProduce)
             throw new InvalidOperationException($"Недостаточно материалов: {string.Join("; ", check.Warnings)}");
 
         var product = await _context.Products
+            .Where(p => p.OrganizationId == ctx.OrganizationId)
             .Include(p => p.RecipeItems)
             .FirstOrDefaultAsync(p => p.Id == dto.ProductId);
 
@@ -179,7 +184,7 @@ public class ProductionService
             throw new InvalidOperationException($"Изделие с ID {dto.ProductId} не найдено");
 
         // Генерируем номер партии
-        var batchNumber = await GenerateBatchNumberAsync();
+        var batchNumber = await GenerateBatchNumberAsync(ctx.OrganizationId);
 
         // Используем себестоимость и рек. цену из карточки изделия
         var costPerUnit = product.EstimatedCost ?? 0;
@@ -187,6 +192,7 @@ public class ProductionService
 
         var production = new Production
         {
+            OrganizationId = ctx.OrganizationId,
             ProductId = dto.ProductId,
             Quantity = dto.Quantity,
             ProductionDate = dto.ProductionDate ?? DateTime.UtcNow,
@@ -202,13 +208,14 @@ public class ProductionService
         await _context.SaveChangesAsync();
 
         // Списываем материалы по FIFO
-        await WriteOffMaterialsFifoAsync(production, product.RecipeItems.ToList(), dto.Quantity);
+        await WriteOffMaterialsFifoAsync(ctx.OrganizationId, production, product.RecipeItems.ToList(), dto.Quantity);
 
         // Создаем готовую продукцию
         for (int i = 0; i < dto.Quantity; i++)
         {
             var finishedProduct = new FinishedProduct
             {
+                OrganizationId = ctx.OrganizationId,
                 ProductionId = production.Id,
                 Status = FinishedProductStatus.InStock,
                 CostPerUnit = production.CostPerUnit,
@@ -223,6 +230,7 @@ public class ProductionService
         await _context.SaveChangesAsync();
 
         await _historyService.LogAsync(
+            ctx,
             OperationTypes.ProductionCreate,
             "Production",
             production.Id,
@@ -232,15 +240,16 @@ public class ProductionService
             $"Произведено: {product.Name}, {dto.Quantity} шт, партия {batchNumber}"
         );
 
-        return (await GetByIdAsync(production.Id))!;
+        return (await GetByIdAsync(ctx.OrganizationId, production.Id))!;
     }
 
     /// <summary>
     /// Отмена производства с возвратом материалов
     /// </summary>
-    public async Task<bool> CancelAsync(int id)
+    public async Task<bool> CancelAsync(OrganizationContext ctx, int id)
     {
         var production = await _context.Productions
+            .Where(p => p.OrganizationId == ctx.OrganizationId)
             .Include(p => p.Product)
             .Include(p => p.MaterialWriteOffs)
             .Include(p => p.FinishedProducts)
@@ -269,6 +278,7 @@ public class ProductionService
         await _context.SaveChangesAsync();
 
         await _historyService.LogAsync(
+            ctx,
             OperationTypes.ProductionCancel,
             "Production",
             production.Id,
@@ -284,9 +294,10 @@ public class ProductionService
     /// <summary>
     /// Полное удаление производства из базы данных
     /// </summary>
-    public async Task<bool> DeleteAsync(int id)
+    public async Task<bool> DeleteAsync(OrganizationContext ctx, int id)
     {
         var production = await _context.Productions
+            .Where(p => p.OrganizationId == ctx.OrganizationId)
             .Include(p => p.Product)
             .Include(p => p.MaterialWriteOffs)
             .Include(p => p.FinishedProducts)
@@ -316,6 +327,7 @@ public class ProductionService
         await _context.SaveChangesAsync();
 
         await _historyService.LogAsync(
+            ctx,
             OperationTypes.ProductionCancel,
             "Production",
             id,
@@ -331,7 +343,7 @@ public class ProductionService
     /// <summary>
     /// Списание материалов по методу FIFO
     /// </summary>
-    private async Task WriteOffMaterialsFifoAsync(Production production, List<RecipeItem> recipeItems, int quantity)
+    private async Task WriteOffMaterialsFifoAsync(int organizationId, Production production, List<RecipeItem> recipeItems, int quantity)
     {
         foreach (var item in recipeItems)
         {
@@ -339,7 +351,7 @@ public class ProductionService
 
             // Получаем поступления с остатками по FIFO (сначала старые)
             var receipts = await _context.MaterialReceipts
-                .Where(r => r.MaterialId == item.MaterialId)
+                .Where(r => r.MaterialId == item.MaterialId && r.Material.OrganizationId == organizationId)
                 .Include(r => r.WriteOffs)
                 .OrderBy(r => r.ReceiptDate)
                 .ThenBy(r => r.Id)
@@ -378,10 +390,11 @@ public class ProductionService
         await _context.SaveChangesAsync();
     }
 
-    private async Task<string> GenerateBatchNumberAsync()
+    private async Task<string> GenerateBatchNumberAsync(int organizationId)
     {
         var today = DateTime.UtcNow.Date;
         var todayProductions = await _context.Productions
+            .Where(p => p.OrganizationId == organizationId)
             .CountAsync(p => p.ProductionDate.Date == today);
 
         return $"P{DateTime.UtcNow:yyyyMMdd}-{(todayProductions + 1):D3}";

@@ -27,11 +27,13 @@ public class ReportService
     /// <summary>
     /// Получить данные для дашборда
     /// </summary>
-    public async Task<DashboardDto> GetDashboardAsync()
+    public async Task<DashboardDto> GetDashboardAsync(int organizationId)
     {
         // Сводка по материалам
-        var materials = await _context.Materials.ToListAsync();
-        var balances = await _materialService.GetAllBalancesAsync(true);
+        var materials = await _context.Materials
+            .Where(m => m.OrganizationId == organizationId)
+            .ToListAsync();
+        var balances = await _materialService.GetAllBalancesAsync(organizationId, true);
         
         var materialsSummary = new MaterialsSummaryDto
         {
@@ -42,8 +44,12 @@ public class ReportService
         };
 
         // Сводка по изделиям
-        var products = await _context.Products.ToListAsync();
-        var productions = await _context.Productions.Where(p => !p.IsCancelled).ToListAsync();
+        var products = await _context.Products
+            .Where(p => p.OrganizationId == organizationId)
+            .ToListAsync();
+        var productions = await _context.Productions
+            .Where(p => p.OrganizationId == organizationId && !p.IsCancelled)
+            .ToListAsync();
         
         var productsSummary = new ProductsSummaryDto
         {
@@ -53,13 +59,13 @@ public class ReportService
         };
 
         // Сводка по готовой продукции
-        var finishedProductsSummary = await _finishedProductService.GetSummaryAsync();
+        var finishedProductsSummary = await _finishedProductService.GetSummaryAsync(organizationId);
 
         // Материалы с низким остатком
         var lowStockMaterials = balances.Where(b => b.IsBelowMinimum).ToList();
 
         // Последние операции
-        var recentOperations = await _historyService.GetRecentAsync(10);
+        var recentOperations = await _historyService.GetRecentAsync(organizationId, 10);
 
         return new DashboardDto
         {
@@ -74,9 +80,11 @@ public class ReportService
     /// <summary>
     /// Отчет о движении материала
     /// </summary>
-    public async Task<MaterialMovementReportDto> GetMaterialMovementReportAsync(int materialId, DateTime? dateFrom = null, DateTime? dateTo = null)
+    public async Task<MaterialMovementReportDto> GetMaterialMovementReportAsync(int organizationId, int materialId, DateTime? dateFrom = null, DateTime? dateTo = null)
     {
-        var material = await _context.Materials.FindAsync(materialId);
+        var material = await _context.Materials
+            .Where(m => m.OrganizationId == organizationId)
+            .FirstOrDefaultAsync(m => m.Id == materialId);
         if (material == null)
             throw new InvalidOperationException($"Материал с ID {materialId} не найден");
 
@@ -150,10 +158,10 @@ public class ReportService
     /// <summary>
     /// Отчет о производстве за период
     /// </summary>
-    public async Task<ProductionReportDto> GetProductionReportAsync(DateTime dateFrom, DateTime dateTo)
+    public async Task<ProductionReportDto> GetProductionReportAsync(int organizationId, DateTime dateFrom, DateTime dateTo)
     {
         var productions = await _context.Productions
-            .Where(p => !p.IsCancelled && p.ProductionDate >= dateFrom && p.ProductionDate <= dateTo)
+            .Where(p => p.OrganizationId == organizationId && !p.IsCancelled && p.ProductionDate >= dateFrom && p.ProductionDate <= dateTo)
             .Include(p => p.Product)
             .ToListAsync();
 
@@ -186,10 +194,11 @@ public class ReportService
     /// <summary>
     /// Отчет о продажах за период
     /// </summary>
-    public async Task<SalesReportDto> GetSalesReportAsync(DateTime dateFrom, DateTime dateTo)
+    public async Task<SalesReportDto> GetSalesReportAsync(int organizationId, DateTime dateFrom, DateTime dateTo)
     {
         var sales = await _context.FinishedProducts
-            .Where(fp => fp.Status == FinishedProductStatus.Sold && 
+            .Where(fp => fp.OrganizationId == organizationId && 
+                        fp.Status == FinishedProductStatus.Sold && 
                         fp.SaleDate >= dateFrom && fp.SaleDate <= dateTo)
             .Include(fp => fp.Production)
                 .ThenInclude(p => p.Product)
@@ -228,28 +237,29 @@ public class ReportService
     /// <summary>
     /// Финансовая сводка
     /// </summary>
-    public async Task<FinancialSummaryDto> GetFinancialSummaryAsync(DateTime dateFrom, DateTime dateTo)
+    public async Task<FinancialSummaryDto> GetFinancialSummaryAsync(int organizationId, DateTime dateFrom, DateTime dateTo)
     {
         // Затраты на материалы за период
         var materialCosts = await _context.MaterialReceipts
-            .Where(r => r.ReceiptDate >= dateFrom && r.ReceiptDate <= dateTo)
+            .Where(r => r.Material.OrganizationId == organizationId && r.ReceiptDate >= dateFrom && r.ReceiptDate <= dateTo)
             .SumAsync(r => r.TotalPrice);
 
         // Выручка от продаж
         var sales = await _context.FinishedProducts
-            .Where(fp => fp.Status == FinishedProductStatus.Sold && 
+            .Where(fp => fp.OrganizationId == organizationId && 
+                        fp.Status == FinishedProductStatus.Sold && 
                         fp.SaleDate >= dateFrom && fp.SaleDate <= dateTo)
             .ToListAsync();
 
         var salesRevenue = sales.Sum(fp => fp.SalePrice ?? 0);
 
         // Стоимость материалов на складе
-        var balances = await _materialService.GetAllBalancesAsync(true);
+        var balances = await _materialService.GetAllBalancesAsync(organizationId, true);
         var materialsOnHandValue = balances.Sum(b => b.TotalValue);
 
         // Стоимость готовой продукции на складе
         var finishedGoodsValue = await _context.FinishedProducts
-            .Where(fp => fp.Status == FinishedProductStatus.InStock)
+            .Where(fp => fp.OrganizationId == organizationId && fp.Status == FinishedProductStatus.InStock)
             .SumAsync(fp => fp.CostPerUnit);
 
         var grossProfit = salesRevenue - materialCosts;

@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using WorkshopApi.DTOs;
 using WorkshopApi.Services;
@@ -6,7 +7,8 @@ namespace WorkshopApi.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class ProductionsController : ControllerBase
+[Authorize]
+public class ProductionsController : BaseApiController
 {
     private readonly ProductionService _productionService;
 
@@ -25,7 +27,10 @@ public class ProductionsController : ControllerBase
         [FromQuery] DateTime? dateTo = null,
         [FromQuery] bool includeCancelled = false)
     {
-        var productions = await _productionService.GetAllAsync(productId, dateFrom, dateTo, includeCancelled);
+        if (!TryValidateOrganizationContext(out var error))
+            return error!;
+
+        var productions = await _productionService.GetAllAsync(OrganizationId!.Value, productId, dateFrom, dateTo, includeCancelled);
         return Ok(productions);
     }
 
@@ -35,7 +40,10 @@ public class ProductionsController : ControllerBase
     [HttpGet("{id}")]
     public async Task<ActionResult<ProductionResponseDto>> GetById(int id)
     {
-        var production = await _productionService.GetByIdAsync(id);
+        if (!TryValidateOrganizationContext(out var error))
+            return error!;
+
+        var production = await _productionService.GetByIdAsync(OrganizationId!.Value, id);
         if (production == null)
             return NotFound(new { message = $"Производство с ID {id} не найдено" });
 
@@ -52,7 +60,10 @@ public class ProductionsController : ControllerBase
     {
         try
         {
-            var result = await _productionService.CheckAvailabilityAsync(productId, quantity);
+            if (!TryValidateOrganizationContext(out var error))
+                return error!;
+
+            var result = await _productionService.CheckAvailabilityAsync(OrganizationId!.Value, productId, quantity);
             return Ok(result);
         }
         catch (InvalidOperationException ex)
@@ -69,7 +80,11 @@ public class ProductionsController : ControllerBase
     {
         try
         {
-            var production = await _productionService.CreateAsync(dto);
+            if (!TryValidateOrganizationContext(out var error))
+                return error!;
+
+            var ctx = GetOrganizationContext();
+            var production = await _productionService.CreateAsync(ctx, dto);
             return CreatedAtAction(nameof(GetById), new { id = production.Id }, production);
         }
         catch (InvalidOperationException ex)
@@ -86,7 +101,11 @@ public class ProductionsController : ControllerBase
     {
         try
         {
-            var result = await _productionService.CancelAsync(id);
+            if (!TryValidateOrganizationContext(out var error))
+                return error!;
+
+            var ctx = GetOrganizationContext();
+            var result = await _productionService.CancelAsync(ctx, id);
             if (!result)
                 return NotFound(new { message = $"Производство с ID {id} не найдено" });
 
@@ -106,7 +125,11 @@ public class ProductionsController : ControllerBase
     {
         try
         {
-            var result = await _productionService.DeleteAsync(id);
+            if (!TryValidateOrganizationContext(out var error))
+                return error!;
+
+            var ctx = GetOrganizationContext();
+            var result = await _productionService.DeleteAsync(ctx, id);
             if (!result)
                 return NotFound(new { message = $"Производство с ID {id} не найдено" });
 

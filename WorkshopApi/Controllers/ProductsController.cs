@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using WorkshopApi.DTOs;
 using WorkshopApi.Services;
@@ -6,7 +7,8 @@ namespace WorkshopApi.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class ProductsController : ControllerBase
+[Authorize]
+public class ProductsController : BaseApiController
 {
     private readonly ProductService _productService;
 
@@ -24,7 +26,10 @@ public class ProductsController : ControllerBase
         [FromQuery] string? category = null,
         [FromQuery] bool includeArchived = false)
     {
-        var products = await _productService.GetAllAsync(search, category, includeArchived);
+        if (!TryValidateOrganizationContext(out var error))
+            return error!;
+
+        var products = await _productService.GetAllAsync(OrganizationId!.Value, search, category, includeArchived);
         return Ok(products);
     }
 
@@ -34,7 +39,10 @@ public class ProductsController : ControllerBase
     [HttpGet("{id}")]
     public async Task<ActionResult<ProductResponseDto>> GetById(int id)
     {
-        var product = await _productService.GetByIdAsync(id);
+        if (!TryValidateOrganizationContext(out var error))
+            return error!;
+
+        var product = await _productService.GetByIdAsync(OrganizationId!.Value, id);
         if (product == null)
             return NotFound(new { message = $"Изделие с ID {id} не найдено" });
 
@@ -49,7 +57,11 @@ public class ProductsController : ControllerBase
     {
         try
         {
-            var product = await _productService.CreateAsync(dto);
+            if (!TryValidateOrganizationContext(out var error))
+                return error!;
+
+            var ctx = GetOrganizationContext();
+            var product = await _productService.CreateAsync(ctx, dto);
             return CreatedAtAction(nameof(GetById), new { id = product.Id }, product);
         }
         catch (InvalidOperationException ex)
@@ -66,7 +78,11 @@ public class ProductsController : ControllerBase
     {
         try
         {
-            var product = await _productService.UpdateAsync(id, dto);
+            if (!TryValidateOrganizationContext(out var error))
+                return error!;
+
+            var ctx = GetOrganizationContext();
+            var product = await _productService.UpdateAsync(ctx, id, dto);
             if (product == null)
                 return NotFound(new { message = $"Изделие с ID {id} не найдено" });
 
@@ -86,7 +102,11 @@ public class ProductsController : ControllerBase
     {
         try
         {
-            var result = await _productService.DeleteAsync(id);
+            if (!TryValidateOrganizationContext(out var error))
+                return error!;
+
+            var ctx = GetOrganizationContext();
+            var result = await _productService.DeleteAsync(ctx, id);
             if (!result)
                 return NotFound(new { message = $"Изделие с ID {id} не найдено" });
 
@@ -106,7 +126,11 @@ public class ProductsController : ControllerBase
     {
         try
         {
-            var product = await _productService.CopyAsync(id, dto);
+            if (!TryValidateOrganizationContext(out var error))
+                return error!;
+
+            var ctx = GetOrganizationContext();
+            var product = await _productService.CopyAsync(ctx, id, dto);
             if (product == null)
                 return NotFound(new { message = $"Изделие с ID {id} не найдено" });
 
@@ -124,7 +148,11 @@ public class ProductsController : ControllerBase
     [HttpPost("{id}/archive")]
     public async Task<ActionResult<ProductResponseDto>> Archive(int id)
     {
-        var product = await _productService.UpdateAsync(id, new ProductUpdateDto { IsArchived = true });
+        if (!TryValidateOrganizationContext(out var error))
+            return error!;
+
+        var ctx = GetOrganizationContext();
+        var product = await _productService.UpdateAsync(ctx, id, new ProductUpdateDto { IsArchived = true });
         if (product == null)
             return NotFound(new { message = $"Изделие с ID {id} не найдено" });
 
@@ -137,7 +165,11 @@ public class ProductsController : ControllerBase
     [HttpPost("{id}/unarchive")]
     public async Task<ActionResult<ProductResponseDto>> Unarchive(int id)
     {
-        var product = await _productService.UpdateAsync(id, new ProductUpdateDto { IsArchived = false });
+        if (!TryValidateOrganizationContext(out var error))
+            return error!;
+
+        var ctx = GetOrganizationContext();
+        var product = await _productService.UpdateAsync(ctx, id, new ProductUpdateDto { IsArchived = false });
         if (product == null)
             return NotFound(new { message = $"Изделие с ID {id} не найдено" });
 
@@ -150,7 +182,10 @@ public class ProductsController : ControllerBase
     [HttpGet("categories")]
     public async Task<ActionResult<List<string>>> GetCategories()
     {
-        var categories = await _productService.GetCategoriesAsync();
+        if (!TryValidateOrganizationContext(out var error))
+            return error!;
+
+        var categories = await _productService.GetCategoriesAsync(OrganizationId!.Value);
         return Ok(categories);
     }
 
@@ -160,8 +195,11 @@ public class ProductsController : ControllerBase
     [HttpPost("{id}/recalculate-weight")]
     public async Task<ActionResult<ProductResponseDto>> RecalculateWeight(int id)
     {
-        await _productService.RecalculateWeightAsync(id);
-        var product = await _productService.GetByIdAsync(id);
+        if (!TryValidateOrganizationContext(out var error))
+            return error!;
+
+        await _productService.RecalculateWeightAsync(OrganizationId!.Value, id);
+        var product = await _productService.GetByIdAsync(OrganizationId!.Value, id);
         if (product == null)
             return NotFound(new { message = $"Изделие с ID {id} не найдено" });
 

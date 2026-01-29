@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using WorkshopApi.DTOs;
 using WorkshopApi.Models;
@@ -7,7 +8,8 @@ namespace WorkshopApi.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class FinishedProductsController : ControllerBase
+[Authorize]
+public class FinishedProductsController : BaseApiController
 {
     private readonly FinishedProductService _finishedProductService;
 
@@ -26,7 +28,10 @@ public class FinishedProductsController : ControllerBase
         [FromQuery] DateTime? dateFrom = null,
         [FromQuery] DateTime? dateTo = null)
     {
-        var products = await _finishedProductService.GetAllAsync(status, productId, dateFrom, dateTo);
+        if (!TryValidateOrganizationContext(out var error))
+            return error!;
+
+        var products = await _finishedProductService.GetAllAsync(OrganizationId!.Value, status, productId, dateFrom, dateTo);
         return Ok(products);
     }
 
@@ -36,7 +41,10 @@ public class FinishedProductsController : ControllerBase
     [HttpGet("{id}")]
     public async Task<ActionResult<FinishedProductResponseDto>> GetById(int id)
     {
-        var product = await _finishedProductService.GetByIdAsync(id);
+        if (!TryValidateOrganizationContext(out var error))
+            return error!;
+
+        var product = await _finishedProductService.GetByIdAsync(OrganizationId!.Value, id);
         if (product == null)
             return NotFound(new { message = $"Готовое изделие с ID {id} не найдено" });
 
@@ -51,7 +59,11 @@ public class FinishedProductsController : ControllerBase
     {
         try
         {
-            var product = await _finishedProductService.SellAsync(id, dto);
+            if (!TryValidateOrganizationContext(out var error))
+                return error!;
+
+            var ctx = GetOrganizationContext();
+            var product = await _finishedProductService.SellAsync(ctx, id, dto);
             if (product == null)
                 return NotFound(new { message = $"Готовое изделие с ID {id} не найдено" });
 
@@ -71,7 +83,11 @@ public class FinishedProductsController : ControllerBase
     {
         try
         {
-            var product = await _finishedProductService.WriteOffAsync(id, dto);
+            if (!TryValidateOrganizationContext(out var error))
+                return error!;
+
+            var ctx = GetOrganizationContext();
+            var product = await _finishedProductService.WriteOffAsync(ctx, id, dto);
             if (product == null)
                 return NotFound(new { message = $"Готовое изделие с ID {id} не найдено" });
 
@@ -91,7 +107,11 @@ public class FinishedProductsController : ControllerBase
     {
         try
         {
-            var product = await _finishedProductService.ReturnToStockAsync(id);
+            if (!TryValidateOrganizationContext(out var error))
+                return error!;
+
+            var ctx = GetOrganizationContext();
+            var product = await _finishedProductService.ReturnToStockAsync(ctx, id);
             if (product == null)
                 return NotFound(new { message = $"Готовое изделие с ID {id} не найдено" });
 
@@ -109,7 +129,11 @@ public class FinishedProductsController : ControllerBase
     [HttpPut("{id}")]
     public async Task<ActionResult<FinishedProductResponseDto>> Update(int id, [FromBody] FinishedProductUpdateDto dto)
     {
-        var product = await _finishedProductService.UpdateAsync(id, dto);
+        if (!TryValidateOrganizationContext(out var error))
+            return error!;
+
+        var ctx = GetOrganizationContext();
+        var product = await _finishedProductService.UpdateAsync(ctx, id, dto);
         if (product == null)
             return NotFound(new { message = $"Готовое изделие с ID {id} не найдено" });
 
@@ -122,7 +146,10 @@ public class FinishedProductsController : ControllerBase
     [HttpGet("summary")]
     public async Task<ActionResult<FinishedProductSummaryDto>> GetSummary()
     {
-        var summary = await _finishedProductService.GetSummaryAsync();
+        if (!TryValidateOrganizationContext(out var error))
+            return error!;
+
+        var summary = await _finishedProductService.GetSummaryAsync(OrganizationId!.Value);
         return Ok(summary);
     }
 

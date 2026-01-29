@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using WorkshopApi.Controllers;
 using WorkshopApi.Data;
 using WorkshopApi.DTOs;
 using WorkshopApi.Models;
@@ -21,9 +22,10 @@ public class ProductService
         _materialService = materialService;
     }
 
-    public async Task<List<ProductListItemDto>> GetAllAsync(string? search = null, string? category = null, bool includeArchived = false)
+    public async Task<List<ProductListItemDto>> GetAllAsync(int organizationId, string? search = null, string? category = null, bool includeArchived = false)
     {
         var query = _context.Products
+            .Where(p => p.OrganizationId == organizationId)
             .Include(p => p.RecipeItems)
             .Include(p => p.Productions)
                 .ThenInclude(pr => pr.FinishedProducts)
@@ -61,9 +63,10 @@ public class ProductService
             .ToListAsync();
     }
 
-    public async Task<ProductResponseDto?> GetByIdAsync(int id)
+    public async Task<ProductResponseDto?> GetByIdAsync(int organizationId, int id)
     {
         var product = await _context.Products
+            .Where(p => p.OrganizationId == organizationId)
             .Include(p => p.RecipeItems)
                 .ThenInclude(r => r.Material)
             .Include(p => p.Productions)
@@ -115,10 +118,11 @@ public class ProductService
         };
     }
 
-    public async Task<ProductResponseDto> CreateAsync(ProductCreateDto dto)
+    public async Task<ProductResponseDto> CreateAsync(OrganizationContext ctx, ProductCreateDto dto)
     {
         var product = new Product
         {
+            OrganizationId = ctx.OrganizationId,
             Name = dto.Name,
             Category = dto.Category,
             Description = dto.Description,
@@ -148,9 +152,10 @@ public class ProductService
         await _context.SaveChangesAsync();
 
         // Пересчитываем вес на основе материалов
-        await RecalculateWeightAsync(product.Id);
+        await RecalculateWeightAsync(ctx.OrganizationId, product.Id);
 
         await _historyService.LogAsync(
+            ctx,
             OperationTypes.ProductCreate,
             "Product",
             product.Id,
@@ -158,12 +163,13 @@ public class ProductService
             description: $"Создано изделие: {product.Name}"
         );
 
-        return (await GetByIdAsync(product.Id))!;
+        return (await GetByIdAsync(ctx.OrganizationId, product.Id))!;
     }
 
-    public async Task<ProductResponseDto?> UpdateAsync(int id, ProductUpdateDto dto)
+    public async Task<ProductResponseDto?> UpdateAsync(OrganizationContext ctx, int id, ProductUpdateDto dto)
     {
         var product = await _context.Products
+            .Where(p => p.OrganizationId == ctx.OrganizationId)
             .Include(p => p.RecipeItems)
             .FirstOrDefaultAsync(p => p.Id == id);
 
@@ -205,10 +211,11 @@ public class ProductService
         // Пересчитываем вес на основе материалов (если рецепт обновлялся)
         if (dto.RecipeItems != null)
         {
-            await RecalculateWeightAsync(product.Id);
+            await RecalculateWeightAsync(ctx.OrganizationId, product.Id);
         }
 
         await _historyService.LogAsync(
+            ctx,
             OperationTypes.ProductUpdate,
             "Product",
             product.Id,
@@ -216,12 +223,13 @@ public class ProductService
             description: $"Обновлено изделие: {product.Name}"
         );
 
-        return await GetByIdAsync(id);
+        return await GetByIdAsync(ctx.OrganizationId, id);
     }
 
-    public async Task<bool> DeleteAsync(int id)
+    public async Task<bool> DeleteAsync(OrganizationContext ctx, int id)
     {
         var product = await _context.Products
+            .Where(p => p.OrganizationId == ctx.OrganizationId)
             .Include(p => p.Productions)
             .FirstOrDefaultAsync(p => p.Id == id);
 
@@ -232,6 +240,7 @@ public class ProductService
                 "Невозможно удалить изделие с существующими записями о производстве. Используйте архивирование.");
 
         await _historyService.LogAsync(
+            ctx,
             OperationTypes.ProductDelete,
             "Product",
             product.Id,
@@ -245,9 +254,10 @@ public class ProductService
         return true;
     }
 
-    public async Task<ProductResponseDto?> CopyAsync(int id, ProductCopyDto dto)
+    public async Task<ProductResponseDto?> CopyAsync(OrganizationContext ctx, int id, ProductCopyDto dto)
     {
         var original = await _context.Products
+            .Where(p => p.OrganizationId == ctx.OrganizationId)
             .Include(p => p.RecipeItems)
             .FirstOrDefaultAsync(p => p.Id == id);
 
@@ -255,6 +265,7 @@ public class ProductService
 
         var copy = new Product
         {
+            OrganizationId = ctx.OrganizationId,
             Name = dto.NewName,
             Category = original.Category,
             Description = original.Description,
@@ -284,9 +295,10 @@ public class ProductService
         await _context.SaveChangesAsync();
 
         // Пересчитываем вес на основе материалов
-        await RecalculateWeightAsync(copy.Id);
+        await RecalculateWeightAsync(ctx.OrganizationId, copy.Id);
 
         await _historyService.LogAsync(
+            ctx,
             OperationTypes.ProductCreate,
             "Product",
             copy.Id,
@@ -294,12 +306,13 @@ public class ProductService
             description: $"Создана копия изделия: {copy.Name} (из {original.Name})"
         );
 
-        return await GetByIdAsync(copy.Id);
+        return await GetByIdAsync(ctx.OrganizationId, copy.Id);
     }
 
-    public async Task<List<string>> GetCategoriesAsync()
+    public async Task<List<string>> GetCategoriesAsync(int organizationId)
     {
         return await _context.Products
+            .Where(p => p.OrganizationId == organizationId)
             .Where(p => p.Category != null && p.Category != "")
             .Select(p => p.Category!)
             .Distinct()
@@ -310,9 +323,10 @@ public class ProductService
     /// <summary>
     /// Пересчитывает вес изделия на основе материалов в рецепте (кг и г)
     /// </summary>
-    public async Task RecalculateWeightAsync(int productId)
+    public async Task RecalculateWeightAsync(int organizationId, int productId)
     {
         var product = await _context.Products
+            .Where(p => p.OrganizationId == organizationId)
             .Include(p => p.RecipeItems)
                 .ThenInclude(r => r.Material)
             .FirstOrDefaultAsync(p => p.Id == productId);
