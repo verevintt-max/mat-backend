@@ -64,6 +64,14 @@ public class OrganizationService
         if (organization == null)
             return null;
 
+        // Generate JoinCode for organizations that don't have one (e.g., old personal organizations)
+        if (string.IsNullOrEmpty(organization.JoinCode) && membership.Role == OrganizationRole.Owner)
+        {
+            organization.JoinCode = GenerateJoinCode();
+            organization.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+        }
+
         return new OrganizationDetailDto
         {
             Id = organization.Id,
@@ -172,9 +180,7 @@ public class OrganizationService
         if (organization.OwnerId != userId)
             throw new UnauthorizedAccessException("Только владелец может редактировать организацию");
 
-        if (organization.IsPersonal)
-            throw new InvalidOperationException("Нельзя редактировать личную организацию");
-
+        // Личную организацию теперь можно переименовывать
         if (!string.IsNullOrEmpty(request.Name))
             organization.Name = request.Name;
 
@@ -258,9 +264,7 @@ public class OrganizationService
         if (organization.OwnerId != userId)
             throw new UnauthorizedAccessException("Только владелец может изменить код организации");
 
-        if (organization.IsPersonal)
-            throw new InvalidOperationException("Личная организация не имеет кода присоединения");
-
+        // Личная организация теперь тоже может иметь код присоединения
         organization.JoinCode = GenerateJoinCode();
         organization.UpdatedAt = DateTime.UtcNow;
         await _context.SaveChangesAsync();
@@ -443,8 +447,7 @@ public class OrganizationService
         if (organization == null)
             throw new InvalidOperationException("Организация с таким кодом не найдена");
 
-        if (organization.IsPersonal)
-            throw new InvalidOperationException("Нельзя присоединиться к личной организации");
+        // Личная организация теперь тоже может принимать участников
 
         // Проверяем, не является ли уже участником
         var existingMembership = organization.Members.FirstOrDefault(m => m.UserId == userId);

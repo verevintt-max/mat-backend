@@ -91,6 +91,7 @@ public class AuthService
                 Description = "Личная организация пользователя",
                 OwnerId = user.Id,
                 IsPersonal = true,
+                JoinCode = GenerateJoinCode(),
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
             };
@@ -392,5 +393,13 @@ public class AuthService
     private static bool VerifyPassword(string password, string hash)
     {
         return BCrypt.Net.BCrypt.Verify(password, hash);
+    }
+
+    private static string GenerateJoinCode()
+    {
+        const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+        var random = new Random();
+        return new string(Enumerable.Repeat(chars, 8)
+            .Select(s => s[random.Next(s.Length)]).ToArray());
     }
 }
