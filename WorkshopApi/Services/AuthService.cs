@@ -65,52 +65,60 @@ public class AuthService
 
             Organization? joinedOrganization = null;
 
-            // Если указан код организации - присоединяемся
+            // Если указан код организации - пытаемся присоединиться
             if (!string.IsNullOrEmpty(request.JoinCode))
             {
                 joinedOrganization = await _context.Organizations
-                    .FirstOrDefaultAsync(o => o.JoinCode == request.JoinCode && !o.IsPersonal);
+                    .FirstOrDefaultAsync(o => o.JoinCode == request.JoinCode.Trim().ToUpper());
 
-                if (joinedOrganization != null)
+                if (joinedOrganization == null)
                 {
-                    var membership = new OrganizationMember
-                    {
-                        OrganizationId = joinedOrganization.Id,
-                        UserId = user.Id,
-                        Role = OrganizationRole.Member,
-                        JoinedAt = DateTime.UtcNow
-                    };
-                    _context.OrganizationMembers.Add(membership);
+                    throw new InvalidOperationException("Организация с указанным кодом не найдена");
                 }
+
+                // Добавляем пользователя в организацию
+                var membership = new OrganizationMember
+                {
+                    OrganizationId = joinedOrganization.Id,
+                    UserId = user.Id,
+                    Role = OrganizationRole.Member,
+                    JoinedAt = DateTime.UtcNow
+                };
+                _context.OrganizationMembers.Add(membership);
+
+                // Устанавливаем эту организацию как текущую
+                user.CurrentOrganizationId = joinedOrganization.Id;
             }
-
-            // Создание личной организации
-            var personalOrg = new Organization
+            else
             {
-                Name = $"Личное пространство {user.Username}",
-                Description = "Личная организация пользователя",
-                OwnerId = user.Id,
-                IsPersonal = true,
-                JoinCode = GenerateJoinCode(),
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
-            };
+                // Код не указан - создаём личную организацию
+                var personalOrg = new Organization
+                {
+                    Name = $"Личное пространство {user.Username}",
+                    Description = "Личная организация пользователя",
+                    OwnerId = user.Id,
+                    IsPersonal = true,
+                    JoinCode = GenerateJoinCode(),
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                };
 
-            _context.Organizations.Add(personalOrg);
-            await _context.SaveChangesAsync();
+                _context.Organizations.Add(personalOrg);
+                await _context.SaveChangesAsync();
 
-            // Добавление пользователя как владельца личной организации
-            var personalMembership = new OrganizationMember
-            {
-                OrganizationId = personalOrg.Id,
-                UserId = user.Id,
-                Role = OrganizationRole.Owner,
-                JoinedAt = DateTime.UtcNow
-            };
-            _context.OrganizationMembers.Add(personalMembership);
+                // Добавление пользователя как владельца личной организации
+                var personalMembership = new OrganizationMember
+                {
+                    OrganizationId = personalOrg.Id,
+                    UserId = user.Id,
+                    Role = OrganizationRole.Owner,
+                    JoinedAt = DateTime.UtcNow
+                };
+                _context.OrganizationMembers.Add(personalMembership);
 
-            // Установка текущей организации
-            user.CurrentOrganizationId = joinedOrganization?.Id ?? personalOrg.Id;
+                // Устанавливаем личную организацию как текущую
+                user.CurrentOrganizationId = personalOrg.Id;
+            }
             await _context.SaveChangesAsync();
 
             await transaction.CommitAsync();

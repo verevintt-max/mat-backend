@@ -325,16 +325,41 @@ public class OrganizationService
         if (membership == null)
             throw new InvalidOperationException("Участник не найден");
 
-        // Переключаем пользователя на личную организацию
-        if (membership.User?.CurrentOrganizationId == organizationId)
-        {
-            var personalOrg = await _context.Organizations
-                .FirstOrDefaultAsync(o => o.OwnerId == memberUserId && o.IsPersonal);
+        // Находим или создаём личную организацию для удаляемого пользователя
+        var personalOrg = await _context.Organizations
+            .FirstOrDefaultAsync(o => o.OwnerId == memberUserId && o.IsPersonal);
 
-            if (personalOrg != null)
+        if (personalOrg == null && membership.User != null)
+        {
+            // Создаём личную организацию, если её нет
+            personalOrg = new Organization
             {
-                membership.User.CurrentOrganizationId = personalOrg.Id;
-            }
+                Name = $"Личное пространство {membership.User.Username}",
+                Description = "Личная организация пользователя",
+                OwnerId = memberUserId,
+                IsPersonal = true,
+                JoinCode = GenerateJoinCode(),
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+            _context.Organizations.Add(personalOrg);
+            await _context.SaveChangesAsync();
+
+            // Добавляем пользователя как владельца
+            var personalMembership = new OrganizationMember
+            {
+                OrganizationId = personalOrg.Id,
+                UserId = memberUserId,
+                Role = OrganizationRole.Owner,
+                JoinedAt = DateTime.UtcNow
+            };
+            _context.OrganizationMembers.Add(personalMembership);
+        }
+
+        // Переключаем пользователя на личную организацию
+        if (membership.User?.CurrentOrganizationId == organizationId && personalOrg != null)
+        {
+            membership.User.CurrentOrganizationId = personalOrg.Id;
         }
 
         _context.OrganizationMembers.Remove(membership);
@@ -366,17 +391,42 @@ public class OrganizationService
         if (membership == null)
             throw new InvalidOperationException("Вы не являетесь участником этой организации");
 
-        // Переключаем на личную организацию
+        // Находим или создаём личную организацию
         var user = await _context.Users.FindAsync(userId);
-        if (user?.CurrentOrganizationId == organizationId)
-        {
-            var personalOrg = await _context.Organizations
-                .FirstOrDefaultAsync(o => o.OwnerId == userId && o.IsPersonal);
+        var personalOrg = await _context.Organizations
+            .FirstOrDefaultAsync(o => o.OwnerId == userId && o.IsPersonal);
 
-            if (personalOrg != null)
+        if (personalOrg == null && user != null)
+        {
+            // Создаём личную организацию, если её нет
+            personalOrg = new Organization
             {
-                user.CurrentOrganizationId = personalOrg.Id;
-            }
+                Name = $"Личное пространство {user.Username}",
+                Description = "Личная организация пользователя",
+                OwnerId = userId,
+                IsPersonal = true,
+                JoinCode = GenerateJoinCode(),
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+            _context.Organizations.Add(personalOrg);
+            await _context.SaveChangesAsync();
+
+            // Добавляем пользователя как владельца
+            var personalMembership = new OrganizationMember
+            {
+                OrganizationId = personalOrg.Id,
+                UserId = userId,
+                Role = OrganizationRole.Owner,
+                JoinedAt = DateTime.UtcNow
+            };
+            _context.OrganizationMembers.Add(personalMembership);
+        }
+
+        // Переключаем на личную организацию
+        if (user?.CurrentOrganizationId == organizationId && personalOrg != null)
+        {
+            user.CurrentOrganizationId = personalOrg.Id;
         }
 
         _context.OrganizationMembers.Remove(membership);
