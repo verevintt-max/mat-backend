@@ -233,6 +233,29 @@ public class OrganizationsController : ControllerBase
     }
 
     /// <summary>
+    /// Присоединиться к организации по коду
+    /// </summary>
+    [HttpPost("join")]
+    [ProducesResponseType(typeof(OrganizationDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<OrganizationDto>> JoinByCode([FromBody] JoinOrganizationRequest request)
+    {
+        try
+        {
+            var userId = GetUserId();
+            if (userId == null) return Unauthorized();
+
+            var organization = await _organizationService.JoinByCodeAsync(userId.Value, request.JoinCode);
+            return Ok(organization);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    /// <summary>
     /// Передать владение организацией (только Owner)
     /// </summary>
     [HttpPost("{id}/transfer-ownership")]

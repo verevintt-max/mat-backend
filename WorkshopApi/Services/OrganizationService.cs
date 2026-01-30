@@ -427,6 +427,57 @@ public class OrganizationService
             organizationId, currentOwnerId, newOwnerId);
     }
 
+    /// <summary>
+    /// Присоединиться к организации по коду
+    /// </summary>
+    public async Task<OrganizationDto> JoinByCodeAsync(int userId, string joinCode)
+    {
+        if (string.IsNullOrWhiteSpace(joinCode))
+            throw new InvalidOperationException("Код организации обязателен");
+
+        var organization = await _context.Organizations
+            .Include(o => o.Owner)
+            .Include(o => o.Members)
+            .FirstOrDefaultAsync(o => o.JoinCode == joinCode.Trim().ToUpper());
+
+        if (organization == null)
+            throw new InvalidOperationException("Организация с таким кодом не найдена");
+
+        if (organization.IsPersonal)
+            throw new InvalidOperationException("Нельзя присоединиться к личной организации");
+
+        // Проверяем, не является ли уже участником
+        var existingMembership = organization.Members.FirstOrDefault(m => m.UserId == userId);
+        if (existingMembership != null)
+            throw new InvalidOperationException("Вы уже являетесь участником этой организации");
+
+        // Добавляем участника
+        var membership = new OrganizationMember
+        {
+            OrganizationId = organization.Id,
+            UserId = userId,
+            Role = OrganizationRole.Member
+        };
+
+        _context.OrganizationMembers.Add(membership);
+        await _context.SaveChangesAsync();
+
+        _logger.LogInformation("Пользователь {UserId} присоединился к организации {OrgId} по коду", userId, organization.Id);
+
+        return new OrganizationDto
+        {
+            Id = organization.Id,
+            Name = organization.Name,
+            Description = organization.Description,
+            IsPersonal = organization.IsPersonal,
+            JoinCode = organization.JoinCode,
+            OwnerId = organization.OwnerId,
+            OwnerName = organization.Owner?.FullName ?? organization.Owner?.Username ?? "",
+            MembersCount = organization.Members.Count + 1,
+            CreatedAt = organization.CreatedAt
+        };
+    }
+
     private static string GenerateJoinCode()
     {
         const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";

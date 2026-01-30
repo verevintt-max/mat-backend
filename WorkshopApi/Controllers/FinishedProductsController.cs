@@ -141,6 +141,30 @@ public class FinishedProductsController : BaseApiController
     }
 
     /// <summary>
+    /// Удалить готовое изделие (только со статусом "На складе")
+    /// </summary>
+    [HttpDelete("{id}")]
+    public async Task<ActionResult> Delete(int id)
+    {
+        try
+        {
+            if (!TryValidateOrganizationContext(out var error))
+                return error!;
+
+            var ctx = GetOrganizationContext();
+            var result = await _finishedProductService.DeleteAsync(ctx, id);
+            if (!result)
+                return NotFound(new { message = $"Готовое изделие с ID {id} не найдено" });
+
+            return Ok(new { message = "Готовое изделие удалено" });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    /// <summary>
     /// Получить сводку по готовой продукции
     /// </summary>
     [HttpGet("summary")]

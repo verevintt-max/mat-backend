@@ -38,6 +38,16 @@ public class SwitchOrganizationRequest
     public int OrganizationId { get; set; }
 }
 
+/// <summary>
+/// Запрос на присоединение к организации по коду
+/// </summary>
+public class JoinOrganizationRequest
+{
+    [Required(ErrorMessage = "Код организации обязателен")]
+    [MaxLength(20)]
+    public string JoinCode { get; set; } = string.Empty;
+}
+
 // ==================== ORGANIZATION RESPONSES ====================
 
 /// <summary>

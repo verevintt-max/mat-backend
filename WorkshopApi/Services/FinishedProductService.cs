@@ -218,6 +218,42 @@ public class FinishedProductService
     }
 
     /// <summary>
+    /// Удаление готового изделия (только со статусом "На складе")
+    /// </summary>
+    public async Task<bool> DeleteAsync(OrganizationContext ctx, int id)
+    {
+        var fp = await _context.FinishedProducts
+            .Where(f => f.OrganizationId == ctx.OrganizationId)
+            .Include(f => f.Production)
+                .ThenInclude(p => p.Product)
+            .FirstOrDefaultAsync(f => f.Id == id);
+
+        if (fp == null) return false;
+
+        if (fp.Status != FinishedProductStatus.InStock)
+            throw new InvalidOperationException($"Можно удалить только изделие со статусом 'На складе'. Текущий статус: {GetStatusDisplay(fp.Status)}");
+
+        var productName = fp.Production.Product.Name;
+        var batchNumber = fp.Production.BatchNumber;
+
+        _context.FinishedProducts.Remove(fp);
+        await _context.SaveChangesAsync();
+
+        await _historyService.LogAsync(
+            ctx,
+            OperationTypes.WriteOff,
+            "FinishedProduct",
+            id,
+            productName,
+            1,
+            fp.CostPerUnit,
+            $"Удалено готовое изделие: {productName}, партия {batchNumber}"
+        );
+
+        return true;
+    }
+
+    /// <summary>
     /// Получить сводку по готовой продукции
     /// </summary>
     public async Task<FinishedProductSummaryDto> GetSummaryAsync(int organizationId)

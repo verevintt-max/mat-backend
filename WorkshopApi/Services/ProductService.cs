@@ -120,6 +120,12 @@ public class ProductService
 
     public async Task<ProductResponseDto> CreateAsync(OrganizationContext ctx, ProductCreateDto dto)
     {
+        // Валидация: минимум один материал обязателен
+        if (dto.RecipeItems == null || dto.RecipeItems.Count == 0)
+        {
+            throw new InvalidOperationException("Необходимо добавить хотя бы один материал в рецепт изделия");
+        }
+
         var product = new Product
         {
             OrganizationId = ctx.OrganizationId,
