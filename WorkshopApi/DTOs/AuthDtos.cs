@@ -32,7 +32,7 @@ public class RegisterRequest
     /// <summary>
     /// Код организации для присоединения при регистрации (опционально)
     /// </summary>
-    [MaxLength(20)]
+    [MaxLength(40)]
     public string? JoinCode { get; set; }
 }
 

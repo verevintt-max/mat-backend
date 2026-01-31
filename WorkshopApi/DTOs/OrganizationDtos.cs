@@ -44,7 +44,7 @@ public class SwitchOrganizationRequest
 public class JoinOrganizationRequest
 {
     [Required(ErrorMessage = "Код организации обязателен")]
-    [MaxLength(20)]
+    [MaxLength(40)]
     public string JoinCode { get; set; } = string.Empty;
 }
 
