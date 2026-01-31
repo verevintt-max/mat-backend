@@ -99,6 +99,7 @@ public class AuthService
                     OwnerId = user.Id,
                     IsPersonal = true,
                     JoinCode = GenerateJoinCode(),
+                    JoinCodeGeneratedAt = DateTime.UtcNow,
                     CreatedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow
                 };
@@ -405,9 +406,7 @@ public class AuthService
 
     private static string GenerateJoinCode()
     {
-        const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-        var random = new Random();
-        return new string(Enumerable.Repeat(chars, 8)
-            .Select(s => s[random.Next(s.Length)]).ToArray());
+        // Генерируем GUID в формате без дефисов, uppercase
+        return Guid.NewGuid().ToString("N").ToUpper();
     }
 }

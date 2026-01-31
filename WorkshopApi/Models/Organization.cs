@@ -24,9 +24,12 @@ public class Organization
     // Является ли организация личной (создается автоматически при регистрации)
     public bool IsPersonal { get; set; } = false;
 
-    // Уникальный код для присоединения
-    [MaxLength(20)]
+    // Уникальный код для присоединения (GUID формат)
+    [MaxLength(40)]
     public string? JoinCode { get; set; }
+
+    // Дата генерации кода (для автоматической смены каждые сутки)
+    public DateTime? JoinCodeGeneratedAt { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 

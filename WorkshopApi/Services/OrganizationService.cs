@@ -64,12 +64,10 @@ public class OrganizationService
         if (organization == null)
             return null;
 
-        // Generate JoinCode for organizations that don't have one (e.g., old personal organizations)
-        if (string.IsNullOrEmpty(organization.JoinCode) && membership.Role == OrganizationRole.Owner)
+        // Проверяем и обновляем код если прошло более 24 часов (только для владельца)
+        if (membership.Role == OrganizationRole.Owner)
         {
-            organization.JoinCode = GenerateJoinCode();
-            organization.UpdatedAt = DateTime.UtcNow;
-            await _context.SaveChangesAsync();
+            await EnsureFreshJoinCodeAsync(organization);
         }
 
         return new OrganizationDetailDto
@@ -129,6 +127,7 @@ public class OrganizationService
             OwnerId = userId,
             IsPersonal = false,
             JoinCode = GenerateJoinCode(),
+            JoinCodeGeneratedAt = DateTime.UtcNow,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
         };
@@ -339,6 +338,7 @@ public class OrganizationService
                 OwnerId = memberUserId,
                 IsPersonal = true,
                 JoinCode = GenerateJoinCode(),
+                JoinCodeGeneratedAt = DateTime.UtcNow,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
             };
@@ -364,6 +364,9 @@ public class OrganizationService
 
         _context.OrganizationMembers.Remove(membership);
         await _context.SaveChangesAsync();
+
+        // Регенерируем код организации после удаления участника
+        await RegenerateJoinCodeAfterMemberChangeAsync(organization);
 
         _logger.LogInformation("Участник {MemberId} удален из организации {OrgId}", memberUserId, organizationId);
     }
@@ -406,6 +409,7 @@ public class OrganizationService
                 OwnerId = userId,
                 IsPersonal = true,
                 JoinCode = GenerateJoinCode(),
+                JoinCodeGeneratedAt = DateTime.UtcNow,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
             };
@@ -431,6 +435,9 @@ public class OrganizationService
 
         _context.OrganizationMembers.Remove(membership);
         await _context.SaveChangesAsync();
+
+        // Регенерируем код организации после выхода участника
+        await RegenerateJoinCodeAfterMemberChangeAsync(organization);
 
         _logger.LogInformation("Пользователь {UserId} покинул организацию {OrgId}", userId, organizationId);
     }
@@ -533,9 +540,38 @@ public class OrganizationService
 
     private static string GenerateJoinCode()
     {
-        const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-        var random = new Random();
-        return new string(Enumerable.Repeat(chars, 8)
-            .Select(s => s[random.Next(s.Length)]).ToArray());
+        // Генерируем GUID в формате без дефисов, uppercase
+        return Guid.NewGuid().ToString("N").ToUpper();
+    }
+
+    /// <summary>
+    /// Проверяет и обновляет код, если прошло более 24 часов
+    /// </summary>
+    private async Task EnsureFreshJoinCodeAsync(Organization organization)
+    {
+        var needsRegeneration = string.IsNullOrEmpty(organization.JoinCode) ||
+                                organization.JoinCodeGeneratedAt == null ||
+                                (DateTime.UtcNow - organization.JoinCodeGeneratedAt.Value).TotalHours >= 24;
+
+        if (needsRegeneration)
+        {
+            organization.JoinCode = GenerateJoinCode();
+            organization.JoinCodeGeneratedAt = DateTime.UtcNow;
+            organization.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+        }
+    }
+
+    /// <summary>
+    /// Регенерирует код после изменений в составе участников
+    /// </summary>
+    private async Task RegenerateJoinCodeAfterMemberChangeAsync(Organization organization)
+    {
+        organization.JoinCode = GenerateJoinCode();
+        organization.JoinCodeGeneratedAt = DateTime.UtcNow;
+        organization.UpdatedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync();
+        
+        _logger.LogInformation("Код организации {OrgId} обновлён после изменения состава участников", organization.Id);
     }
 }
