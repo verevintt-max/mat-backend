@@ -5,6 +5,7 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using WorkshopApi.Data;
 using WorkshopApi.Services;
+using WorkshopApi.Middleware;
 
 // Fix for PostgreSQL DateTime handling
 AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
@@ -185,6 +186,9 @@ app.UseCors("AllowFrontend");
 // Authentication & Authorization
 app.UseAuthentication();
 app.UseAuthorization();
+
+// Проверка членства в организации
+app.UseOrganizationMembershipValidation();
 
 app.MapControllers();
 
