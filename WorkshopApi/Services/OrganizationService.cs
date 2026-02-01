@@ -382,11 +382,11 @@ public class OrganizationService
         if (organization == null)
             throw new InvalidOperationException("Организация не найдена");
 
+        // Владелец не может покинуть свою организацию
         if (organization.OwnerId == userId)
-            throw new InvalidOperationException("Владелец не может покинуть организацию. Сначала передайте владение другому участнику");
+            throw new InvalidOperationException("Владелец не может покинуть организацию. Сначала передайте владение другому участнику или удалите её");
 
-        if (organization.IsPersonal)
-            throw new InvalidOperationException("Нельзя покинуть личную организацию");
+        // Можно покинуть чужую личную организацию (если был приглашён)
 
         var membership = await _context.OrganizationMembers
             .FirstOrDefaultAsync(m => m.OrganizationId == organizationId && m.UserId == userId);
